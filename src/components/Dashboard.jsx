@@ -285,25 +285,25 @@ export default function Landing({ onLogin, onRegister }) {
                     <form className="bg-[#061424] border border-[#1a3555] p-8 rounded-2xl shadow-xl">
                         <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Full Name</label>
-                                <input type="text" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors" placeholder="John Doe" />
+                                <label htmlFor="contact-name" className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Full Name</label>
+                                <input id="contact-name" name="name" type="text" autoComplete="name" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors" placeholder="John Doe" />
                             </div>
                             <div>
-                                <label className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Email</label>
-                                <input type="email" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors" placeholder="you@email.com" />
+                                <label htmlFor="contact-email" className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Email</label>
+                                <input id="contact-email" name="email" type="email" autoComplete="email" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors" placeholder="you@email.com" />
                             </div>
                         </div>
                         <div className="mb-4">
-                            <label className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">User Role</label>
-                            <select className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors appearance-none">
+                            <label htmlFor="contact-role" className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">User Role</label>
+                            <select id="contact-role" name="role" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors appearance-none">
                                 <option>Resident</option>
                                 <option>Barangay Official</option>
                                 <option>Maintenance Personnel</option>
                             </select>
                         </div>
                         <div className="mb-6">
-                            <label className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Message</label>
-                            <textarea rows="4" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors resize-none" placeholder="How can we help?"></textarea>
+                            <label htmlFor="contact-message" className="block text-[12px] font-bold text-[#8ba3bd] mb-2 uppercase tracking-wider">Message</label>
+                            <textarea id="contact-message" name="message" rows="4" className="w-full bg-[#0a1829] border border-[#1a3555] text-white p-3.5 rounded-xl focus:outline-none focus:border-[#19c7ff] transition-colors resize-none" placeholder="How can we help?"></textarea>
                         </div>
                         <button type="button" className="w-full bg-[#0879ff] hover:bg-[#0066eb] text-white font-bold py-4 rounded-xl transition-colors shadow-[0_4px_15px_rgba(8,121,255,0.2)]">
                             Send Message
