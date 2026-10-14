@@ -1,131 +1,144 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Activity, Battery, Waves, MapPin, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import api from './api/axios';
+import Login from './components/Login';
+import Register from './components/Register';
+import { Activity, LogOut, Droplets, Battery, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function App() {
-  const [stations, setStations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    const [user, setUser] = useState(null);
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [dashboardData, setDashboardData] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // Fetch data from your Laravel backend API
-    axios.get('http://127.0.0.1:8000/api/v1/dashboard')
-      .then(response => {
-        setStations(response.data.stations);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching dashboard data:', err);
-        setError('Failed to connect to Laravel backend.');
-        setLoading(false);
-      });
-  }, []);
+    // Check localStorage on initial load
+    useEffect(() => {
+        const token = localStorage.getItem('auth_token');
+        const role = localStorage.getItem('user_role');
+        if (token) {
+            setUser({ role });
+            fetchDashboard();
+        }
+    }, []);
 
-  if (loading) {
+    const fetchDashboard = async () => {
+        setLoading(true);
+        try {
+            // Calls http://127.0.0.1:8000/api/v1/dashboard
+            const response = await api.get('/dashboard');
+            setDashboardData(response.data);
+            setError(null);
+        } catch (err) {
+            setError('Failed to connect to local Laravel backend. Make sure php artisan serve is running.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await api.post('/logout');
+        } catch (e) {
+            // Clear session locally even if request fails
+        }
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_role');
+        setUser(null);
+    };
+
+    const handleAuthSuccess = (userData) => {
+        setUser(userData);
+        fetchDashboard();
+    };
+
+    // 1. Render Login or Register if not authenticated
+    if (!user) {
+        return isRegistering ? (
+            <Register 
+                onRegisterSuccess={handleAuthSuccess} 
+                onSwitchToLogin={() => setIsRegistering(false)} 
+            />
+        ) : (
+            <Login 
+                onLoginSuccess={handleAuthSuccess} 
+                onSwitchToRegister={() => setIsRegistering(true)} 
+            />
+        );
+    }
+
+    // 2. Render Calauan Drainage Monitoring Dashboard if authenticated
     return (
-      <div className="flex justify-center items-center h-screen bg-slate-900 text-white font-mono text-xl">
-        Loading Calauan Drainage Telemetry...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen bg-slate-900 text-red-400 font-mono text-lg">
-        <AlertTriangle className="w-12 h-12 mb-2" />
-        {error}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      {/* Header */}
-      <header className="max-w-7xl mx-auto mb-10 border-b border-slate-800 pb-5">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
-              Agosense: Smart Drainage & Blockage Detection
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Municipal Urban Flood Mitigation & Waste Monitoring — Calauan, Laguna
-            </p>
-          </div>
-          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            System Online
-          </span>
-        </div>
-      </header>
-
-      {/* Main Grid Content */}
-      <main className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {stations.map(station => {
-          const latest = station.sensor_readings?.[0];
-          return (
-            <div 
-              key={station.id} 
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl hover:border-slate-700 transition-all"
-            >
-              {/* Station Card Header */}
-              <div className="flex justify-between items-start mb-4">
+        <div className="min-h-screen bg-gray-900 text-white p-6">
+            {/* Header */}
+            <header className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
                 <div>
-                  <span className="text-xs font-mono font-bold tracking-wider text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20">
-                    {station.station_code}
-                  </span>
+                    <h1 className="text-2xl font-bold text-cyan-400 flex items-center gap-2">
+                        <Activity className="text-cyan-400" /> AGOSENSE: Calauan Drainage Monitor
+                    </h1>
+                    <p className="text-sm text-gray-400">IoT Smart Drainage & Blockage Detection System (Midterm Build)</p>
                 </div>
-                <span className="text-xs uppercase tracking-wider font-semibold px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400">
-                  {station.status}
-                </span>
-              </div>
-
-              <h2 className="text-lg font-semibold text-slate-200 mb-1 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-slate-400" />
-                {station.location_name}
-              </h2>
-              <p className="text-xs text-slate-500 font-mono mb-6">
-                Lat: {station.latitude} | Long: {station.longitude}
-              </p>
-
-              {/* Telemetry Metrics */}
-              <div className="space-y-3 pt-4 border-t border-slate-800/80">
-                <div className="flex justify-between items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-                  <span className="text-sm text-slate-400 flex items-center gap-2">
-                    <Waves className="w-4 h-4 text-cyan-400" /> Water Level
-                  </span>
-                  <span className="text-lg font-bold font-mono text-cyan-400">
-                    {latest ? `${latest.water_level_cm} cm` : 'No Data'}
-                  </span>
+                <div className="flex items-center gap-4">
+                    <span className="text-xs bg-gray-800 border border-gray-700 px-3 py-1 rounded-full text-cyan-300 flex items-center gap-1">
+                        <ShieldCheck size={14} /> Role: <strong className="uppercase">{user.role || localStorage.getItem('user_role')}</strong>
+                    </span>
+                    <button 
+                        onClick={handleLogout}
+                        className="flex items-center gap-1 bg-red-600 hover:bg-red-500 px-4 py-2 rounded text-sm font-semibold transition"
+                    >
+                        <LogOut size={16} /> Logout
+                    </button>
                 </div>
+            </header>
 
-                <div className="flex justify-between items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-                  <span className="text-sm text-slate-400 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-400" /> Flow Rate
-                  </span>
-                  <span className="text-lg font-bold font-mono text-indigo-400">
-                    {latest ? `${latest.flow_rate} L/s` : 'No Data'}
-                  </span>
-                </div>
+            {/* Dashboard Content */}
+            <main>
+                {error && (
+                    <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded mb-6 flex items-center gap-2">
+                        <AlertTriangle size={20} /> {error}
+                    </div>
+                )}
 
-                <div className="flex justify-between items-center bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-                  <span className="text-sm text-slate-400 flex items-center gap-2">
-                    <Battery className="w-4 h-4 text-emerald-400" /> Solar Battery
-                  </span>
-                  <span className="text-lg font-bold font-mono text-emerald-400">
-                    {latest ? `${latest.battery_voltage} V` : 'No Data'}
-                  </span>
-                </div>
-              </div>
+                {loading ? (
+                    <div className="text-center py-20 text-gray-400 animate-pulse">Loading telemetry from local Laravel server...</div>
+                ) : dashboardData ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {dashboardData.stations?.map((station) => (
+                            <div key={station.id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-lg hover:border-cyan-500 transition">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <span className="text-xs font-mono bg-cyan-950 text-cyan-400 px-2 py-0.5 rounded border border-cyan-800">
+                                            {station.code}
+                                        </span>
+                                        <h3 className="text-lg font-bold mt-1">{station.name}</h3>
+                                    </div>
+                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                        station.status === 'normal' ? 'bg-green-900/50 text-green-400 border border-green-700' : 'bg-red-900/50 text-red-400 border border-red-700'
+                                    }`}>
+                                        {station.status.toUpperCase()}
+                                    </span>
+                                </div>
 
-              <div className="mt-6 text-right">
-                <span className="text-[10px] font-mono text-slate-500">
-                  Last Synced: {latest ? latest.recorded_at : 'Never'}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </main>
-    </div>
-  );
+                                <div className="space-y-3 mt-4 text-sm text-gray-300">
+                                    <div className="flex justify-between items-center bg-gray-900/50 p-2.5 rounded">
+                                        <span className="flex items-center gap-2 text-gray-400"><Droplets size={16} className="text-cyan-400"/> Water Level</span>
+                                        <span className="font-bold">{station.latest_reading?.water_level_cm || 0} cm</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-gray-900/50 p-2.5 rounded">
+                                        <span className="flex items-center gap-2 text-gray-400"><Activity size={16} className="text-cyan-400"/> Flow Rate</span>
+                                        <span className="font-bold">{station.latest_reading?.flow_rate || 0} L/min</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-gray-900/50 p-2.5 rounded">
+                                        <span className="flex items-center gap-2 text-gray-400"><Battery size={16} className="text-cyan-400"/> Battery Voltage</span>
+                                        <span className="font-bold">{station.latest_reading?.battery_voltage || 0} V</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-400 text-center py-10">No station data found. Make sure your database seeders ran successfully.</p>
+                )}
+            </main>
+        </div>
+    );
 }
