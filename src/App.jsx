@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUp, BatteryCharging, Check, CheckCircle2,
   ChevronRight, CircleHelp, Clock3, Clock4, Cog, Database, Droplet,
-  Gauge, LogOut, MapPin, Menu, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
+  FileDown, Gauge, LogOut, MapPin, Menu, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
   Waves, X, LocateFixed,
 } from 'lucide-react';
 import L from 'leaflet';
@@ -53,26 +53,131 @@ function SectionHeading({ kicker, title, description, aside }) {
 
 function RecordStatus({ status }) {
   const value = String(status || 'normal');
-  const tone = /block|critical/i.test(value) ? 'critical' : /warning|watch|alert|elevated/i.test(value) ? 'warning' : 'normal';
+  const tone = /block|critical/i.test(value) ? 'critical' : /warning|watch|alert|elevated/i.test(value) ? 'warning' : /await|unknown/i.test(value) ? 'unknown' : 'normal';
   return <span className={`record-status ${tone}`}><i/>{status || 'Normal'}</span>;
 }
 
 const normalizedReportStatus = (status) => status === 'submitted' ? 'pending' : status || 'pending';
 const reportStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In Progress', resolved: 'Resolved' })[normalizedReportStatus(status)] || status;
 
-function RecordsTable({ records, loading, error, station }) {
+function RecordsTable({ stations, selectedStation }) {
+  const [stationId, setStationId] = useState(selectedStation?.id ? String(selectedStation.id) : '');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [period, setPeriod] = useState('raw');
+  const [anomaliesOnly, setAnomaliesOnly] = useState(false);
+  const [records, setRecords] = useState([]);
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0, from: null, to: null });
+  const [exporting, setExporting] = useState('');
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [settledRequest, setSettledRequest] = useState('');
+  const [scrollTop, setScrollTop] = useState(0);
+  const tableViewport = useRef(null);
+  const pageSize = 25;
+  const requestKey = JSON.stringify({ stationId, dateFrom, dateTo, period, anomaliesOnly, page, pageSize });
+  const loading = settledRequest !== requestKey;
+  const rowHeight = 50;
+  const viewportHeight = 500;
+  const overscan = 5;
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(records.length, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan);
+  const visibleRecords = records.slice(startIndex, endIndex);
+  const selectedStationRecord = stations.find((station) => String(station.id) === String(stationId));
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = JSON.parse(requestKey);
+    const params = {
+      station_id: query.stationId || undefined,
+      date_from: query.dateFrom || undefined,
+      date_to: query.dateTo || undefined,
+      period: query.period,
+      anomalies: query.anomaliesOnly ? 1 : undefined,
+      page: query.page,
+      per_page: query.pageSize,
+    };
+    api.get('/v1/records', { params, signal: controller.signal })
+      .then(({ data }) => {
+        setRecords(Array.isArray(data.records) ? data.records : []);
+        setPagination(data.pagination || { current_page: 1, last_page: 1, total: 0, from: null, to: null });
+        setScrollTop(0);
+        if (tableViewport.current) tableViewport.current.scrollTop = 0;
+        setError('');
+        setSettledRequest(requestKey);
+      })
+      .catch((err) => {
+        if (err.code === 'ERR_CANCELED') return;
+        setRecords([]);
+        setPagination({ current_page: 1, last_page: 1, total: 0, from: null, to: null });
+        setError(err.response?.data?.message || 'Sensor history could not be loaded. Please try again.');
+        setSettledRequest(requestKey);
+      });
+    return () => controller.abort();
+  }, [requestKey]);
+
+  const updateFilter = (setter, value) => {
+    setter(value);
+    setPage(1);
+    setScrollTop(0);
+  };
+
+  const exportRecords = async (format) => {
+    setExporting(format);
+    setError('');
+    try {
+      const { data } = await api.get('/v1/records/export', {
+        params: {
+          station_id: stationId || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          period,
+          anomalies: anomaliesOnly ? 1 : undefined,
+          format,
+        },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agosense-${period}-records.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.message || `Could not export the ${format.toUpperCase()} file.`);
+    } finally { setExporting(''); }
+  };
+
+  const changePeriod = (value) => updateFilter(setPeriod, value);
+  const historyTitle = period === 'raw' ? 'Recent Sensor Records' : period === 'hourly' ? 'Hourly Sensor Averages' : 'Daily Sensor Summaries';
+
   return <section className="records-section">
-    <SectionHeading kicker="MONITORING HISTORY" title="Recent Sensor Records" description="Recorded sensor measurements from the drainage network." aside={<span className="records-count"><Database size={14}/>{records.length} records</span>}/>
-    <div className="records-container">
-      {loading && records.length === 0 ? <div className="records-state"><span className="loader"/><strong>Loading sensor history</strong><p>Fetching saved readings for {station?.station_code || 'the selected station'}.</p></div>
-        : error && records.length === 0 ? <div className="records-state"><span className="records-state-icon"><Database size={19}/></span><strong>History is unavailable</strong><p>{error}</p></div>
-          : records.length === 0 ? <div className="records-state"><span className="records-state-icon"><Clock3 size={19}/></span><strong>No readings for this station yet</strong><p>Historical sensor readings from {station?.station_code || 'this station'} will appear here after the node reports data.</p></div>
-            : <div className="table-scroll"><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>WATER LEVEL</th><th>FLOW RATE</th><th>STATUS</th></tr></thead><tbody>{records.map((record, index) => {
-              const at = record.recorded_at || record.created_at || record.timestamp;
-              const condition = evaluateDrainageCondition(record, record.station || station);
-              return <tr key={record.id || `${at}-${index}`}><td><span className="record-date">{formatPhilippineTime(at)}</span>{record.station?.station_code && <small>{record.station.station_code}</small>}</td><td>{formatValue(record.water_level_cm)} <small>cm</small></td><td>{formatValue(record.flow_rate, 2)} <small>L/min</small></td><td><RecordStatus status={condition.label}/></td></tr>;
-            })}</tbody></table></div>}
+    <SectionHeading kicker="MONITORING HISTORY" title={historyTitle} description="Filter, review, and export saved measurements. Dates use Philippine Standard Time (UTC+8)." aside={<span className="records-count"><Database size={14}/>{pagination.total} records</span>}/>
+    <div className="history-toolbar">
+      <label className="history-filter station-filter">Station<select id="history-station-filter" name="station_id" value={stationId} onChange={(event) => updateFilter(setStationId, event.target.value)}><option value="">All stations</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label>
+      <label className="history-filter">Date from<input id="history-date-from" name="date_from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => updateFilter(setDateFrom, event.target.value)}/></label>
+      <label className="history-filter">Date to<input id="history-date-to" name="date_to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => updateFilter(setDateTo, event.target.value)}/></label>
+      <label className="anomaly-filter"><input id="history-anomalies-only" name="anomalies_only" type="checkbox" checked={anomaliesOnly} onChange={(event) => updateFilter(setAnomaliesOnly, event.target.checked)}/><span>Show anomalies / blockages only</span></label>
+      <div className="export-actions"><button type="button" onClick={() => exportRecords('csv')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'csv' ? 'Preparing CSV…' : 'Export CSV'}</button><button type="button" onClick={() => exportRecords('pdf')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'pdf' ? 'Preparing PDF…' : 'Export PDF'}</button></div>
     </div>
+    <div className="period-switcher" role="group" aria-label="Historical data resolution">{[['raw', 'Raw data'], ['hourly', 'Hourly averages'], ['daily', 'Daily summaries']].map(([value, label]) => <button key={value} type="button" className={period === value ? 'active' : ''} aria-pressed={period === value} onClick={() => changePeriod(value)}>{label}</button>)}</div>
+    {error && <div className="history-error" role="alert">{error}</div>}
+    <div className="records-container">
+      {loading ? <div className="records-state"><span className="loader"/><strong>Loading sensor history</strong><p>Fetching {period} readings for {selectedStationRecord?.station_code || 'the selected station'}.</p></div>
+        : !loading && records.length === 0 ? <div className="records-state"><span className="records-state-icon"><Clock3 size={19}/></span><strong>{error ? 'History is unavailable' : anomaliesOnly ? 'No anomalies in this date range' : 'No readings match these filters'}</strong><p>{error || `Saved ${period} readings${selectedStationRecord ? ` for ${selectedStationRecord.station_code}` : ''} will appear here when they match your filters.`}</p></div>
+          : <div className="table-scroll virtual-records" ref={tableViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>WATER LEVEL</th><th>FLOW RATE</th><th>STATUS</th></tr></thead><tbody>
+            {startIndex > 0 && <tr aria-hidden="true" className="virtual-spacer"><td colSpan="4" style={{ height: startIndex * rowHeight }}/></tr>}
+            {visibleRecords.map((record) => {
+              const at = record.recorded_at || record.created_at || record.timestamp;
+              const condition = record.drainage_condition || evaluateDrainageCondition(record, record.station || selectedStationRecord);
+              return <tr key={`${period}-${record.id}-${at}`} className="virtual-record-row" style={{ height: rowHeight }}><td><span className="record-date">{formatPhilippineTime(at)}</span>{record.station?.station_code && <small>{record.station.station_code}</small>}</td><td>{formatValue(record.water_level_cm)} <small>cm</small></td><td>{formatValue(record.flow_rate, 2)} <small>L/min</small></td><td><RecordStatus status={condition.label}/></td></tr>;
+            })}
+            {endIndex < records.length && <tr aria-hidden="true" className="virtual-spacer"><td colSpan="4" style={{ height: (records.length - endIndex) * rowHeight }}/></tr>}
+          </tbody></table></div>}
+    </div>
+    <div className="history-pagination"><span>{pagination.total ? `Showing ${pagination.from || 0}–${pagination.to || 0} of ${pagination.total}` : 'No records'}</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button><span>Page {pagination.current_page || page} of {pagination.last_page || 1}</span><button type="button" disabled={page >= pagination.last_page || loading} onClick={() => setPage((current) => Math.min(pagination.last_page, current + 1))}>Next</button></div></div>
   </section>;
 }
 
@@ -88,8 +193,8 @@ function FieldReportForm({ role, stations, selectedStationId, onStationChange, o
 
   const submitReport = async (event) => {
     event.preventDefault();
-    if (!stationId || !subject.trim() || details.trim().length < 10) {
-      setFeedback({ type: 'error', message: !stationId ? 'Select a drainage station for this report.' : 'Enter a subject and at least 10 characters of observation details.' });
+    if (!stationId || !subject.trim() || details.trim().length < 20) {
+      setFeedback({ type: 'error', message: !stationId ? 'Select a drainage station for this report.' : 'Enter a descriptive subject and at least 20 characters of observation details.' });
       return;
     }
     setBusy(true);
@@ -110,8 +215,8 @@ function FieldReportForm({ role, stations, selectedStationId, onStationChange, o
     <div className="report-intro"><p className="section-kicker">FIELD OPERATIONS</p><h2>Report a field issue</h2><p>{roleDescription}</p><div className="report-role-note"><MapPin size={15}/><span>Choose the station node where you observed the issue.</span></div></div>
     <form className="report-form" onSubmit={submitReport}>
       <label htmlFor="report-station">Drainage station</label><select id="report-station" value={stationId} onChange={(event) => onStationChange(event.target.value || null)} required disabled={!stations.length}><option value="">{stations.length ? 'Select a station' : 'No stations available'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code} / {station.location_name}</option>)}</select>
-      <label htmlFor="issue-subject">Issue subject</label><input id="issue-subject" value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={160} placeholder="Debris buildup near roadside drain" required/>
-      <label htmlFor="observation-details">Observation details</label><textarea id="observation-details" value={details} onChange={(event) => setDetails(event.target.value)} minLength={10} maxLength={5000} rows={4} placeholder="Describe what you observed and where it is located..." required/>
+      <label htmlFor="issue-subject">Issue subject</label><input id="issue-subject" name="subject" value={subject} onChange={(event) => setSubject(event.target.value)} minLength={8} maxLength={120} placeholder="Debris buildup near roadside drain" required/>
+      <label htmlFor="observation-details">Observation details</label><textarea id="observation-details" name="message" value={details} onChange={(event) => setDetails(event.target.value)} minLength={20} maxLength={2000} rows={4} placeholder="Describe what you observed and where it is located..." required/>
       {feedback && <p className={`report-feedback ${feedback.type}`} role="status">{feedback.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}<span>{feedback.message}</span></p>}
       <button className="report-submit" type="submit" disabled={busy || !stations.length} aria-busy={busy}><Send size={15} className={busy ? 'spin' : ''}/>{busy ? 'Submitting report...' : 'Submit Field Report'}</button>
     </form>
@@ -120,16 +225,25 @@ function FieldReportForm({ role, stations, selectedStationId, onStationChange, o
 
 function ReportsList({ reports, loading, error, isAdmin, onStatusUpdate }) {
   const [updatingId, setUpdatingId] = useState(null);
-  const [statusError, setStatusError] = useState('');
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3800);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   const handleStatusChange = async (reportId, status) => {
     setUpdatingId(reportId);
-    setStatusError('');
     const result = await onStatusUpdate(reportId, status);
-    if (!result.ok) setStatusError(result.message);
+    setToast({
+      type: result.ok ? 'success' : 'error',
+      message: result.ok ? `Report marked ${reportStatusLabel(status).toLowerCase()}.` : result.message,
+    });
     setUpdatingId(null);
   };
   return <section className="reports-list-panel"><div className="reports-list-heading"><div><span className="section-kicker">SUBMISSIONS</span><h3>Recent field reports</h3></div><span className="records-count">{reports.length} reports</span></div>
-    {statusError && <p className="report-feedback error" role="alert"><AlertTriangle size={15}/>{statusError}</p>}
+    {toast && <div className={`status-toast ${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}><span>{toast.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}</span><p>{toast.message}</p><button type="button" aria-label="Dismiss notification" onClick={() => setToast(null)}>×</button></div>}
     {loading && reports.length === 0 ? <div className="records-state"><span className="loader"/><p>Loading reports...</p></div>
       : error && reports.length === 0 ? <div className="records-state"><strong>Reports unavailable</strong><p>{error}</p></div>
         : reports.length === 0 ? <div className="records-state"><span className="records-state-icon"><Clock4 size={18}/></span><strong>No reports submitted</strong><p>New field reports will appear here after submission.</p></div>
@@ -300,11 +414,8 @@ export default function App() {
   const [userLoading, setUserLoading] = useState(Boolean(localStorage.getItem('auth_token')));
   const [authView, setAuthView] = useState('login');
   const [dashboardData, setDashboardData] = useState(null);
-  const [records, setRecords] = useState([]);
   const [fieldReports, setFieldReports] = useState([]);
-  const [recordsLoading, setRecordsLoading] = useState(false);
   const [reportsLoading, setReportsLoading] = useState(false);
-  const [recordsError, setRecordsError] = useState('');
   const [reportsError, setReportsError] = useState('');
   const [loading, setLoading] = useState(false);
   const [networkLive, setNetworkLive] = useState(false);
@@ -324,7 +435,7 @@ export default function App() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('user_role');
-    setToken(null); setUser(null); setDashboardData(null); setRecords([]); setFieldReports([]); setError(''); setRecordsError(''); setReportsError('');
+    setToken(null); setUser(null); setDashboardData(null); setFieldReports([]); setError(''); setReportsError('');
   }, []);
 
   const fetchDashboard = useCallback(async () => {
@@ -346,20 +457,6 @@ export default function App() {
     } finally { setLoading(false); }
   }, [logout]);
 
-  const fetchRecords = useCallback(async () => {
-    if (!localStorage.getItem('auth_token')) return;
-    setRecordsLoading(true);
-    try {
-      const { data } = await api.get('/v1/records', { params: selectedStationId ? { station_id: selectedStationId } : {} });
-      const rows = Array.isArray(data) ? data : data.records || data.data?.records || data.data || [];
-      setRecords(Array.isArray(rows) ? rows : []);
-      setRecordsError('');
-    } catch (err) {
-      if (err.response?.status === 401) { logout(); return; }
-      setRecordsError(err.response?.data?.message || 'The records endpoint is not available right now.');
-    } finally { setRecordsLoading(false); }
-  }, [logout, selectedStationId]);
-
   const fetchFieldReports = useCallback(async () => {
     if (!localStorage.getItem('auth_token')) return;
     setReportsLoading(true);
@@ -378,7 +475,7 @@ export default function App() {
     try {
       const { data } = await api.patch(`/v1/admin/reports/${reportId}/status`, { status });
       setFieldReports((current) => current.map((report) => report.id === reportId ? data.report : report));
-      return { ok: true };
+      return { ok: true, message: data.message || 'Report status updated.' };
     } catch (err) {
       if (err.response?.status === 401) logout();
       return { ok: false, message: err.response?.data?.message || 'The report status could not be updated.' };
@@ -404,13 +501,6 @@ export default function App() {
     const dashboardTimer = window.setInterval(fetchDashboard, 30000);
     return () => { active = false; window.clearTimeout(initialize); window.clearInterval(dashboardTimer); };
   }, [token, fetchDashboard, logout]);
-
-  useEffect(() => {
-    if (!token) return undefined;
-    const initialFetch = window.setTimeout(fetchRecords, 0);
-    const recordsTimer = window.setInterval(fetchRecords, 60000);
-    return () => { window.clearTimeout(initialFetch); window.clearInterval(recordsTimer); };
-  }, [token, fetchRecords]);
 
   useEffect(() => {
     if (!token || activeTab !== 'reports') return undefined;
@@ -448,7 +538,7 @@ export default function App() {
       {error && <div className="alert-banner" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={fetchDashboard}>Retry</button></div>}
 
       {activeTab === 'overview' && <section className="tab-page overview-page">
-        <div className="page-intro"><div><p className="eyebrow location-tag"><MapPin size={13}/> CALAUAN, LAGUNA</p><h1>Drainage overview</h1><p className="intro-copy">{userLoading ? 'Loading access profile...' : isAdmin ? 'Admin Portal: Full station control' : 'Resident Portal: Live municipal monitoring view'}</p></div><div className="intro-actions">{isAdmin && <button className="manage-stations-button" type="button" onClick={() => selectTab('map')}><Cog size={15}/>Manage Stations</button>}<button className="refresh-button" onClick={() => { fetchDashboard(); fetchRecords(); }} disabled={loading}><RefreshCw size={15} className={loading ? 'spin' : ''}/>{loading ? 'Refreshing live data' : 'Refresh live data'}</button></div></div>
+        <div className="page-intro"><div><p className="eyebrow location-tag"><MapPin size={13}/> CALAUAN, LAGUNA</p><h1>Drainage overview</h1><p className="intro-copy">{userLoading ? 'Loading access profile...' : isAdmin ? 'Admin Portal: Full station control' : 'Resident Portal: Live municipal monitoring view'}</p></div><div className="intro-actions">{isAdmin && <button className="manage-stations-button" type="button" onClick={() => selectTab('map')}><Cog size={15}/>Manage Stations</button>}<button className="refresh-button" onClick={fetchDashboard} disabled={loading}><RefreshCw size={15} className={loading ? 'spin' : ''}/>{loading ? 'Refreshing live data' : 'Refresh live data'}</button></div></div>
         <div className="summary-row"><div><span className="summary-label">Monitored stations</span><strong>{stations.length.toString().padStart(2, '0')}</strong></div><div><span className="summary-label">Online</span><strong className="text-emerald">{onlineStations.toString().padStart(2, '0')}</strong></div><div><span className="summary-label">Attention required</span><strong className="text-amber">{attentionStations.toString().padStart(2, '0')}</strong></div><div className="summary-updated"><span className="summary-label">Access level</span><strong>{userLoading ? 'Checking role' : isAdmin ? 'Admin / full control' : 'Viewer / live view'}</strong><small>Auto refresh / 30 sec</small></div></div>
         <div className="overview-grid"><section className="overview-panel"><div className="panel-heading"><div><span className="panel-kicker">FIELD NETWORK</span><h2>Station status</h2></div><button className="text-action" onClick={() => selectTab('telemetry')}>Live sensor readings <ChevronRight size={14}/></button></div>{stations.length ? <div className="overview-station-list">{stations.slice(0, 6).map((station, index) => <button className="overview-station-row" key={station.id || station.station_code || index} onClick={() => openStationTelemetry(station)}><span className={`station-health ${station.status === 'active' ? 'healthy' : station.status === 'maintenance' ? 'attention' : 'offline'}`}/><span className="overview-node-code">{station.station_code || 'UNASSIGNED'}</span><span className="overview-node-name">{station.location_name || 'Unnamed station'}</span><span className="overview-node-level">{formatValue(readingFor(station)?.water_level_cm)} <small>cm</small></span><ChevronRight size={14}/></button>)}</div> : <div className="inventory-empty">{loading ? 'Loading station nodes...' : 'No stations are currently available.'}</div>}</section>
           <section className="overview-panel network-panel"><div className="panel-heading"><div><span className="panel-kicker">SYSTEM HEALTH</span><h2>Operations summary</h2></div><span className={`system-state ${networkLive ? 'up' : 'down'}`}><i/>{networkLive ? 'OPERATIONAL' : 'CHECK LINK'}</span></div><div className="operation-metric"><span><Activity size={15}/>API connection</span><strong>{networkLive ? 'Connected' : 'Awaiting response'}</strong></div><div className="operation-metric"><span><Gauge size={15}/>Field stations</span><strong>{onlineStations} / {stations.length} online</strong></div><div className="operation-metric"><span><Clock3 size={15}/>Refresh cadence</span><strong>30 seconds</strong></div><button className="map-shortcut" onClick={() => selectTab('map')}><MapPin size={15}/>Open station map<ChevronRight size={14}/></button></section></div>
@@ -457,7 +547,7 @@ export default function App() {
       {activeTab === 'telemetry' && <section className="tab-page telemetry-page">{loading && !dashboardData ? <div className="loading-panel compact-loader"><span className="loader"/><p>Refreshing live data...</p></div> : <TelemetryCards station={selectedStation}/>}<div className="station-details"><div className="station-details-label"><PanelsTopLeft size={15}/><span>Station inventory</span><small>{stations.length} registered</small></div>{stations.length ? <div className="station-grid">{stations.map((station, index) => <StationCard key={station.id || station.station_code || index} station={station} stationId={`station-detail-${station.id || station.station_code || index}`}/>)}</div> : <div className="inventory-empty">No stations are currently available. Stations will appear after they are registered with the monitoring service.</div>}</div></section>}
       {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
       {activeTab === 'reports' && <section className="tab-page reports-page"><div className="page-intro compact-intro"><div><p className="eyebrow">FIELD OPERATIONS</p><h1>Field reports</h1><p className="intro-copy">Submit a local observation and review reports available to your account.</p></div><span className="role-context">{isAdmin ? 'ADMIN VIEW / ALL SUBMISSIONS' : 'VIEWER / YOUR SUBMISSIONS'}</span></div><FieldReportForm role={role} stations={stations} selectedStationId={selectedStation?.id ? String(selectedStation.id) : ''} onStationChange={setSelectedStationId} onSubmitted={fetchFieldReports}/><ReportsList reports={fieldReports} loading={reportsLoading} error={reportsError} isAdmin={isAdmin} onStatusUpdate={updateReportStatus}/></section>}
-      {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable records={records} loading={recordsLoading} error={recordsError} station={selectedStation}/></section>}
+      {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable key={selectedStation?.id || 'all-stations'} stations={stations} selectedStation={selectedStation}/></section>}
 
       <footer className="page-footer"><span><Activity size={14}/>AGOSENSE / municipal drainage operations</span><span>Live sensor readings refresh every 30 seconds</span></footer>
     </main>

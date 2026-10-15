@@ -123,6 +123,8 @@ button:disabled{cursor:not-allowed}
 .report-submit[aria-busy="true"]{cursor:progress}
 .records-table .record-status.critical{color:#ff858a;background:#351719;border-color:#783437}
 .records-table .record-status.critical i{background:#ff6269}
+.records-table .record-status.unknown{color:#a8bac9;background:#172331;border-color:#304355}
+.records-table .record-status.unknown i{background:#8298ac}
 .map-empty-state{position:absolute;z-index:400;left:50%;top:50%;display:grid;gap:5px;transform:translate(-50%,-50%);width:min(310px,calc(100% - 32px));padding:13px;border:1px solid #1a3555;border-radius:6px;background:#061321e8;text-align:center;pointer-events:none}
 .map-empty-state strong{font-size:10px;color:#dce8f2}.map-empty-state span{font-size:9px;color:#8ba3bd}
 .status-pill.maintenance{background:#451a0344;color:#fcd34d;border-color:#92400e66}.status-pill.maintenance i{background:#fbbf24;box-shadow:0 0 7px #fbbf2466}
@@ -130,6 +132,37 @@ button:disabled{cursor:not-allowed}
 .station-health.offline{background:#64748b;box-shadow:inset 0 0 0 1px #94a3b855}
 .leaflet-node.offline{background:#64748b!important;box-shadow:0 0 0 1px #64748b!important}.leaflet-node.offline:after{border-color:#64748b!important;animation:none}
 .leaflet-popup-content .leaflet-status.down{color:#94a3b8}.leaflet-popup-content .leaflet-status.maintenance{color:#fbbf24}
+/* Historical filters, resolution controls, and bounded virtual table. */
+.history-toolbar{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(2,minmax(135px,.8fr)) minmax(185px,1.2fr) auto;align-items:end;gap:9px;margin:18px 0 11px;padding:13px;border:1px solid #1a3555;border-radius:7px;background:#071521}
+.history-filter{display:grid;gap:5px;color:#8ba3bd;font-size:9px;font-weight:650;text-transform:uppercase;letter-spacing:.06em}
+.history-filter select,.history-filter input{width:100%;height:35px;min-width:0;border:1px solid #25425c;border-radius:5px;background:#040d1a;color:#dce8f2;padding:0 9px;font-size:10px;outline:none;color-scheme:dark}
+.history-filter select:focus,.history-filter input:focus{border-color:#19c7ff88;box-shadow:0 0 0 2px #19c7ff12}
+.anomaly-filter{display:flex;align-items:center;gap:8px;min-height:35px;color:#a8bac9;font-size:9px;line-height:1.35;cursor:pointer}
+.anomaly-filter input{width:15px;height:15px;flex:none;accent-color:#f0ad42}
+.export-actions{display:flex;gap:6px;justify-content:flex-end}
+.export-actions button,.history-pagination button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:35px;padding:0 9px;border:1px solid #25425c;border-radius:5px;background:#0a1b2a;color:#c4d3df;font-size:9px;white-space:nowrap}
+.export-actions button:hover,.history-pagination button:not(:disabled):hover{border-color:#19c7ff77;color:#9aeaff}
+.export-actions button:disabled,.history-pagination button:disabled{opacity:.45;cursor:not-allowed}
+.period-switcher{display:flex;gap:3px;margin:0 0 10px;padding:3px;border:1px solid #1a3555;border-radius:5px;background:#061321;width:max-content;max-width:100%;overflow-x:auto}
+.period-switcher button{min-height:30px;padding:0 11px;border:1px solid transparent;border-radius:3px;background:transparent;color:#8298ac;font-size:9px;white-space:nowrap}
+.period-switcher button.active{border-color:#174765;background:#0c2b40;color:#a9eaff}
+.history-error{margin:8px 0;padding:9px 11px;border:1px solid #783437;border-radius:5px;background:#351719;color:#ffacae;font-size:10px}
+.virtual-records{max-height:500px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.virtual-records .records-table thead{position:sticky;top:0;z-index:1;background:#091725}
+.virtual-records .records-table th{background:#091725}
+.virtual-record-row{height:50px;max-height:50px}
+.virtual-record-row td{height:50px;max-height:50px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.virtual-spacer td{padding:0!important;border:0!important;line-height:0;font-size:0}
+.history-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;color:#8298ac;font-size:9px}
+.history-pagination>div{display:flex;align-items:center;gap:8px}
+.history-pagination button{min-height:31px}
+.status-toast{position:sticky;top:8px;z-index:4;display:flex;align-items:center;gap:9px;width:min(420px,100%);margin:10px 0 0 auto;padding:10px 12px;border:1px solid #286247;border-radius:6px;background:#0c211b;color:#a5f3c7;box-shadow:0 8px 24px #0005;animation:toast-in .18s ease-out}
+.status-toast.error{border-color:#783437;background:#281416;color:#ffb0b2}
+.status-toast>span{display:grid;place-items:center;flex:none}.status-toast p{flex:1;margin:0;font-size:10px;line-height:1.5}.status-toast button{border:0;background:transparent;color:inherit;font-size:19px;line-height:1;cursor:pointer}
+@keyframes toast-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:900px){.history-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.export-actions{justify-content:flex-start}.anomaly-filter{min-height:35px}}
+@media(max-width:520px){.history-toolbar{grid-template-columns:1fr 1fr;gap:8px;padding:10px}.history-filter.station-filter,.anomaly-filter,.export-actions{grid-column:1/-1}.history-filter select,.history-filter input{height:39px;font-size:12px}.anomaly-filter{padding:4px 0;font-size:10px}.export-actions{display:grid;grid-template-columns:1fr 1fr}.export-actions button{min-height:39px}.period-switcher{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.period-switcher button{padding:0 5px;font-size:8px}.history-pagination{align-items:flex-start;flex-direction:column}.history-pagination>div{width:100%;justify-content:space-between}.history-pagination button{min-height:38px;padding:0 12px}.virtual-records{max-height:55svh;min-height:210px}.records-table{min-width:650px}}
+@media(prefers-reduced-motion:reduce){.status-toast{animation:none}}
 /* Phone layout: give map controls their own space and prevent narrow-screen clipping. */
 @media(max-width:620px){
  html,body,#root{width:100%;max-width:100%;overflow-x:hidden}
