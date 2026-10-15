@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowUp, BatteryCharging, Check, CheckCircle2,
   ChevronRight, CircleHelp, Clock3, Clock4, Cog, Database, Droplet,
   FileDown, Gauge, LogOut, MapPin, Menu, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
-  Waves, X, LocateFixed,
+  Waves, X, LocateFixed, Sun, Moon, Settings, SlidersHorizontal, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
@@ -11,6 +11,7 @@ import 'leaflet/dist/leaflet.css';
 import api from './api/axios';
 import Login from './components/Login';
 import Register from './components/Register';
+import Brand from './components/Brand';
 
 const CENTER = { latitude: 14.1417, longitude: 121.3167 };
 const EMPTY_STATIONS = [];
@@ -20,6 +21,7 @@ const tabs = [
   { id: 'map', label: 'Station Map', icon: MapPin },
   { id: 'reports', label: 'Field Reports', icon: AlertTriangle },
   { id: 'history', label: 'Historical Records', icon: Database },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 const formatValue = (value, digits = 1) => value == null || value === ''
@@ -60,6 +62,85 @@ function RecordStatus({ status }) {
 const normalizedReportStatus = (status) => status === 'submitted' ? 'pending' : status || 'pending';
 const reportStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In Progress', resolved: 'Resolved' })[normalizedReportStatus(status)] || status;
 
+function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdSaved, isAdmin }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState(null);
+  const [thresholdStationId, setThresholdStationId] = useState(selectedStation?.id ? String(selectedStation.id) : '');
+  const thresholdStation = stations.find((station) => String(station.id) === String(thresholdStationId));
+  const [threshold, setThreshold] = useState(String(thresholdStation?.warning_threshold_cm ?? 60));
+  const [thresholdBusy, setThresholdBusy] = useState(false);
+  const [thresholdFeedback, setThresholdFeedback] = useState(null);
+
+  useEffect(() => {
+    setThresholdStationId(selectedStation?.id ? String(selectedStation.id) : '');
+    setThreshold(String(selectedStation?.warning_threshold_cm ?? 60));
+  }, [selectedStation?.id, selectedStation?.warning_threshold_cm]);
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    setPasswordFeedback(null);
+    if (newPassword !== passwordConfirmation) {
+      setPasswordFeedback({ type: 'error', text: 'The new password and confirmation do not match.' });
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const { data } = await api.post('/v1/account/password', {
+        current_password: currentPassword,
+        password: newPassword,
+        password_confirmation: passwordConfirmation,
+      });
+      setPasswordFeedback({ type: 'success', text: data.message || 'Password updated successfully.' });
+      setCurrentPassword(''); setNewPassword(''); setPasswordConfirmation('');
+    } catch (err) {
+      const errors = err.response?.data?.errors;
+      setPasswordFeedback({ type: 'error', text: errors ? Object.values(errors).flat().join(' ') : err.response?.data?.message || 'Unable to update your password.' });
+    } finally { setPasswordBusy(false); }
+  };
+
+  const saveThreshold = async (event) => {
+    event.preventDefault();
+    if (!thresholdStationId) return;
+    setThresholdBusy(true); setThresholdFeedback(null);
+    try {
+      const { data } = await api.patch(`/v1/admin/stations/${thresholdStationId}/threshold`, { warning_threshold_cm: Number(threshold) });
+      setThresholdFeedback({ type: 'success', text: data.message || 'Alert threshold updated.' });
+      onThresholdSaved?.();
+    } catch (err) {
+      const errors = err.response?.data?.errors;
+      setThresholdFeedback({ type: 'error', text: errors ? Object.values(errors).flat().join(' ') : err.response?.data?.message || 'Unable to update this station threshold.' });
+    } finally { setThresholdBusy(false); }
+  };
+
+  const passwordField = (id, label, value, onChange, shown, setShown, autoComplete) => <label className="settings-field" htmlFor={id}>{label}<span className="settings-password-input"><input id={id} name={id} type={shown ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required minLength={id === 'settings-current-password' ? undefined : 8}/><button type="button" className="reveal-button" aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} onClick={() => setShown((visible) => !visible)}>{shown ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label>;
+
+  return <section className="settings-page">
+    <SectionHeading kicker="PREFERENCES & ACCOUNT" title="Settings" description="Manage account security and station alert limits."/>
+    <div className="settings-grid">
+      <section className="settings-panel settings-appearance"><div className="settings-panel-heading"><Sun size={20}/><span><strong>Appearance</strong><small>Choose a display that suits your working conditions.</small></span></div><button className="theme-setting-button" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <><Sun size={17}/>Light mode</> : <><Moon size={17}/>Dark mode</>}<span>Change</span></button></section>
+      <section className="settings-panel settings-password"><div className="settings-panel-heading"><KeyRound size={20}/><span><strong>Change password</strong><small>Confirm your current password before choosing a new one.</small></span></div><form className="settings-form" onSubmit={changePassword}>
+        {passwordField('settings-current-password', 'Current password', currentPassword, setCurrentPassword, showCurrentPassword, setShowCurrentPassword, 'current-password')}
+        {passwordField('settings-new-password', 'New password', newPassword, setNewPassword, showNewPassword, setShowNewPassword, 'new-password')}
+        <label className="settings-field" htmlFor="settings-password-confirmation">Confirm new password<span className="settings-password-input"><input id="settings-password-confirmation" name="password_confirmation" type={showPasswordConfirmation ? 'text' : 'password'} value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} autoComplete="new-password" minLength={8} required/><button type="button" className="reveal-button" aria-label={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'} onClick={() => setShowPasswordConfirmation((visible) => !visible)}>{showPasswordConfirmation ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label>
+        {passwordFeedback && <p className={`settings-feedback ${passwordFeedback.type}`} role={passwordFeedback.type === 'error' ? 'alert' : 'status'}>{passwordFeedback.text}</p>}
+        <button className="settings-primary-button" type="submit" disabled={passwordBusy}>{passwordBusy ? 'Updating password…' : 'Update password'}</button>
+      </form></section>
+      <section className="settings-panel settings-threshold"><div className="settings-panel-heading"><Gauge size={20}/><span><strong>Alert threshold</strong><small>Trigger elevated water alerts at this station’s configured depth.</small></span></div>{isAdmin ? <form className="settings-form" onSubmit={saveThreshold}>
+        <label className="settings-field" htmlFor="settings-threshold-station">Station<select id="settings-threshold-station" name="station_id" value={thresholdStationId} onChange={(event) => { setThresholdStationId(event.target.value); const station = stations.find((item) => String(item.id) === event.target.value); setThreshold(String(station?.warning_threshold_cm ?? 60)); setThresholdFeedback(null); }} required><option value="" disabled>Select a station</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code} · {station.location_name}</option>)}</select></label>
+        <label className="settings-field" htmlFor="settings-threshold-cm">Water level limit (cm)<input id="settings-threshold-cm" name="warning_threshold_cm" type="number" min="1" max="10000" step="0.1" value={threshold} onChange={(event) => setThreshold(event.target.value)} required/><small>Current limit: {thresholdStation?.warning_threshold_cm ?? 60} cm. Blockage detection also checks low flow.</small></label>
+        {thresholdFeedback && <p className={`settings-feedback ${thresholdFeedback.type}`} role={thresholdFeedback.type === 'error' ? 'alert' : 'status'}>{thresholdFeedback.text}</p>}
+        <button className="settings-primary-button" type="submit" disabled={!thresholdStationId || thresholdBusy}>{thresholdBusy ? 'Saving threshold…' : 'Save alert threshold'}</button>
+      </form> : <p className="settings-readonly">Threshold editing is available to administrators. Current selected station limit: <strong>{selectedStation?.warning_threshold_cm ?? 60} cm</strong>.</p>}</section>
+    </div>
+  </section>;
+}
+
 function RecordsTable({ stations, selectedStation }) {
   const [stationId, setStationId] = useState(selectedStation?.id ? String(selectedStation.id) : '');
   const [dateFrom, setDateFrom] = useState('');
@@ -70,6 +151,7 @@ function RecordsTable({ stations, selectedStation }) {
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0, from: null, to: null });
   const [exporting, setExporting] = useState('');
   const [error, setError] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [settledRequest, setSettledRequest] = useState('');
   const [scrollTop, setScrollTop] = useState(0);
@@ -151,23 +233,24 @@ function RecordsTable({ stations, selectedStation }) {
   };
 
   const changePeriod = (value) => updateFilter(setPeriod, value);
-  const historyTitle = period === 'raw' ? 'Recent Sensor Records' : period === 'hourly' ? 'Hourly Sensor Averages' : 'Daily Sensor Summaries';
+  const historyTitle = period === 'raw' ? 'Recent Sensor Records' : 'Daily Sensor Summaries';
 
   return <section className="records-section">
     <SectionHeading kicker="MONITORING HISTORY" title={historyTitle} description="Filter, review, and export saved measurements. Dates use Philippine Standard Time (UTC+8)." aside={<span className="records-count"><Database size={14}/>{pagination.total} records</span>}/>
-    <div className="history-toolbar">
+    <button className="history-filter-toggle" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><SlidersHorizontal size={17}/>{filtersOpen ? 'Hide filters' : 'Filters, dates & export'}<ChevronRight size={16}/></button>
+    <div className={`history-toolbar ${filtersOpen ? 'is-open' : ''}`}>
       <label className="history-filter station-filter">Station<select id="history-station-filter" name="station_id" value={stationId} onChange={(event) => updateFilter(setStationId, event.target.value)}><option value="">All stations</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label>
       <label className="history-filter">Date from<input id="history-date-from" name="date_from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => updateFilter(setDateFrom, event.target.value)}/></label>
       <label className="history-filter">Date to<input id="history-date-to" name="date_to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => updateFilter(setDateTo, event.target.value)}/></label>
       <label className="anomaly-filter"><input id="history-anomalies-only" name="anomalies_only" type="checkbox" checked={anomaliesOnly} onChange={(event) => updateFilter(setAnomaliesOnly, event.target.checked)}/><span>Show anomalies / blockages only</span></label>
       <div className="export-actions"><button type="button" onClick={() => exportRecords('csv')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'csv' ? 'Preparing CSV…' : 'Export CSV'}</button><button type="button" onClick={() => exportRecords('pdf')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'pdf' ? 'Preparing PDF…' : 'Export PDF'}</button></div>
     </div>
-    <div className="period-switcher" role="group" aria-label="Historical data resolution">{[['raw', 'Raw data'], ['hourly', 'Hourly averages'], ['daily', 'Daily summaries']].map(([value, label]) => <button key={value} type="button" className={period === value ? 'active' : ''} aria-pressed={period === value} onClick={() => changePeriod(value)}>{label}</button>)}</div>
+    <div className="period-switcher" role="group" aria-label="Historical data resolution">{[['raw', 'Raw Data'], ['daily', 'Daily Summaries']].map(([value, label]) => <button key={value} type="button" className={period === value ? 'active' : ''} aria-pressed={period === value} onClick={() => changePeriod(value)}>{label}</button>)}</div>
     {error && <div className="history-error" role="alert">{error}</div>}
     <div className="records-container">
       {loading ? <div className="records-state"><span className="loader"/><strong>Loading sensor history</strong><p>Fetching {period} readings for {selectedStationRecord?.station_code || 'the selected station'}.</p></div>
         : !loading && records.length === 0 ? <div className="records-state"><span className="records-state-icon"><Clock3 size={19}/></span><strong>{error ? 'History is unavailable' : anomaliesOnly ? 'No anomalies in this date range' : 'No readings match these filters'}</strong><p>{error || `Saved ${period} readings${selectedStationRecord ? ` for ${selectedStationRecord.station_code}` : ''} will appear here when they match your filters.`}</p></div>
-          : <div className="table-scroll virtual-records" ref={tableViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>WATER LEVEL</th><th>FLOW RATE</th><th>STATUS</th></tr></thead><tbody>
+          : <><div className="table-scroll virtual-records" ref={tableViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>WATER LEVEL</th><th>FLOW RATE</th><th>STATUS</th></tr></thead><tbody>
             {startIndex > 0 && <tr aria-hidden="true" className="virtual-spacer"><td colSpan="4" style={{ height: startIndex * rowHeight }}/></tr>}
             {visibleRecords.map((record) => {
               const at = record.recorded_at || record.created_at || record.timestamp;
@@ -175,7 +258,13 @@ function RecordsTable({ stations, selectedStation }) {
               return <tr key={`${period}-${record.id}-${at}`} className="virtual-record-row" style={{ height: rowHeight }}><td><span className="record-date">{formatPhilippineTime(at)}</span>{record.station?.station_code && <small>{record.station.station_code}</small>}</td><td>{formatValue(record.water_level_cm)} <small>cm</small></td><td>{formatValue(record.flow_rate, 2)} <small>L/min</small></td><td><RecordStatus status={condition.label}/></td></tr>;
             })}
             {endIndex < records.length && <tr aria-hidden="true" className="virtual-spacer"><td colSpan="4" style={{ height: (records.length - endIndex) * rowHeight }}/></tr>}
-          </tbody></table></div>}
+          </tbody></table></div><div className="record-card-list">{records.map((record) => {
+            const at = record.recorded_at || record.created_at || record.timestamp;
+            const condition = record.drainage_condition || evaluateDrainageCondition(record, record.station || selectedStationRecord);
+            const recordStation = record.station || selectedStationRecord;
+            const statusLabel = condition.code === 'normal' ? 'Normal' : condition.code === 'elevated_water' ? 'Warning' : condition.code === 'blockage_detected' ? 'Blockage' : 'Awaiting data';
+            return <article className="record-card" key={`mobile-${period}-${record.id}-${at}`}><div className="record-card-heading"><div><strong>{recordStation?.location_name || recordStation?.station_code || 'Drainage station'}</strong><small>{recordStation?.station_code || 'Station'}</small></div><RecordStatus status={statusLabel}/></div><p className="record-card-time"><Clock3 size={14}/>{formatPhilippineTime(at)}</p><div className="record-card-metrics"><div><span>Water level</span><strong>{formatValue(record.water_level_cm)} <small>cm</small></strong></div><div><span>Flow rate</span><strong>{formatValue(record.flow_rate, 2)} <small>L/min</small></strong></div></div></article>;
+          })}</div></>}
     </div>
     <div className="history-pagination"><span>{pagination.total ? `Showing ${pagination.from || 0}–${pagination.to || 0} of ${pagination.total}` : 'No records'}</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button><span>Page {pagination.current_page || page} of {pagination.last_page || 1}</span><button type="button" disabled={page >= pagination.last_page || loading} onClick={() => setPage((current) => Math.min(pagination.last_page, current + 1))}>Next</button></div></div>
   </section>;
@@ -375,7 +464,8 @@ function MapStationFocus({ station }) {
   return null;
 }
 
-function StationMap({ stations, selectedStation, onOpenStation }) {
+function StationMap({ stations, selectedStation, onOpenStation, theme = 'light' }) {
+  const [tileError, setTileError] = useState(false);
   const createNodeIcon = (status, conditionCode) => {
     const conditionClass = status === 'offline' ? 'offline' : status === 'maintenance' ? 'attention' : conditionCode === 'blockage_detected' ? 'critical' : conditionCode === 'elevated_water' ? 'attention' : 'online';
     return L.divIcon({
@@ -386,12 +476,16 @@ function StationMap({ stations, selectedStation, onOpenStation }) {
     });
   };
 
+  useEffect(() => { setTileError(false); }, [theme]);
+  const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const handleTileError = () => setTileError(true);
+
   return <section className="map-view">
     <SectionHeading kicker="FIELD NETWORK / CALAUAN, LAGUNA" title="Drainage station map" description="Pan or zoom the map. Select a station marker to view current sensor readings." aside={<span className="map-center-chip"><LocateFixed size={14}/>{CENTER.latitude} N / {CENTER.longitude} E</span>}/>
-    <div className="station-map-frame"><div className="map-toolbar"><span><i className="map-toolbar-dot"/>LIVE STATION LOCATIONS</span><span className="map-scale">OPENSTREETMAP / DARK DISPLAY</span></div>
+    <div className="station-map-frame"><div className="map-toolbar"><span><i className="map-toolbar-dot"/>LIVE STATION LOCATIONS</span><span className="map-scale">{tileError ? 'MAP TILES TEMPORARILY UNAVAILABLE' : 'OPENSTREETMAP / PUBLIC TILES'}</span></div>
       <MapContainer className="leaflet-station-map" center={[CENTER.latitude, CENTER.longitude]} zoom={14} scrollWheelZoom zoomControl attributionControl>
         <MapStationFocus station={selectedStation}/>
-        <TileLayer className="dark-osm-tiles" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" subdomains="abc" maxZoom={19}/>
+        <TileLayer key={tileUrl} className="dark-osm-tiles" eventHandlers={{ tileerror: handleTileError }} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url={tileUrl} subdomains="abc" maxZoom={19}/>
         {stations.map((station, index) => {
           const latitude = Number(station.latitude) || CENTER.latitude;
           const longitude = Number(station.longitude) || CENTER.longitude;
@@ -423,6 +517,31 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedStationId, setSelectedStationId] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('agosense_theme') || 'light');
+  const mobileMenuToggleRef = useRef(null);
+  const wasMenuOpen = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('agosense_theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setMobileMenuOpen(false); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (wasMenuOpen.current && !mobileMenuOpen) mobileMenuToggleRef.current?.focus();
+    wasMenuOpen.current = mobileMenuOpen;
+  }, [mobileMenuOpen]);
 
   const acceptLogin = (newUser) => {
     setUser(newUser || null);
@@ -530,9 +649,17 @@ export default function App() {
 
   return <div className="dashboard-shell">
     <header className="topbar">
-      <a className="brand" href="#dashboard" aria-label="AGOSENSE dashboard"><span className="brand-mark">{'\u2248'}</span><span><strong>AGOSENSE</strong><small>DRAINAGE INTELLIGENCE</small></span></a>
-      <nav className={`tab-navigation ${mobileMenuOpen ? 'is-open' : ''}`} aria-label="Dashboard sections">{tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={15}/><span>{label}</span></button>)}<div className="mobile-drawer-footer"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div></nav>
-      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><MapPin size={14}/><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station"><option value="">{stations.length ? 'Select station' : 'No stations'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button><button className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button></div>
+      <Brand />
+      <nav id="dashboard-navigation" className={`tab-navigation ${mobileMenuOpen ? 'is-open' : ''}`} aria-label="Dashboard sections" inert={!mobileMenuOpen}>
+        <div className="drawer-heading"><Brand className="drawer-brand"/><button className="drawer-close" type="button" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={19}/></button></div>
+        <span className="drawer-group-label">MONITORING</span>
+        {tabs.slice(0, 5).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>)}
+        <span className="drawer-group-label settings-group">ACCOUNT</span>
+        {tabs.slice(5).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>)}
+        <div className="mobile-drawer-footer"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={18}/><span>Sign out</span></button></div>
+      </nav>
+      {mobileMenuOpen && <button className="drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)}/>}
+      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><MapPin size={14}/><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station"><option value="">{stations.length ? 'Select station' : 'No stations'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button ref={mobileMenuToggleRef} className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button></div>
     </header>
     <main className="dashboard-main" id="dashboard">
       {error && <div className="alert-banner" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={fetchDashboard}>Retry</button></div>}
@@ -545,11 +672,10 @@ export default function App() {
       </section>}
 
       {activeTab === 'telemetry' && <section className="tab-page telemetry-page">{loading && !dashboardData ? <div className="loading-panel compact-loader"><span className="loader"/><p>Refreshing live data...</p></div> : <TelemetryCards station={selectedStation}/>}<div className="station-details"><div className="station-details-label"><PanelsTopLeft size={15}/><span>Station inventory</span><small>{stations.length} registered</small></div>{stations.length ? <div className="station-grid">{stations.map((station, index) => <StationCard key={station.id || station.station_code || index} station={station} stationId={`station-detail-${station.id || station.station_code || index}`}/>)}</div> : <div className="inventory-empty">No stations are currently available. Stations will appear after they are registered with the monitoring service.</div>}</div></section>}
-      {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
+      {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry} theme={theme}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
       {activeTab === 'reports' && <section className="tab-page reports-page"><div className="page-intro compact-intro"><div><p className="eyebrow">FIELD OPERATIONS</p><h1>Field reports</h1><p className="intro-copy">Submit a local observation and review reports available to your account.</p></div><span className="role-context">{isAdmin ? 'ADMIN VIEW / ALL SUBMISSIONS' : 'VIEWER / YOUR SUBMISSIONS'}</span></div><FieldReportForm role={role} stations={stations} selectedStationId={selectedStation?.id ? String(selectedStation.id) : ''} onStationChange={setSelectedStationId} onSubmitted={fetchFieldReports}/><ReportsList reports={fieldReports} loading={reportsLoading} error={reportsError} isAdmin={isAdmin} onStatusUpdate={updateReportStatus}/></section>}
       {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable key={selectedStation?.id || 'all-stations'} stations={stations} selectedStation={selectedStation}/></section>}
-
-      <footer className="page-footer"><span><Activity size={14}/>AGOSENSE / municipal drainage operations</span><span>Live sensor readings refresh every 30 seconds</span></footer>
+      {activeTab === 'settings' && <section className="tab-page"><SettingsPage theme={theme} setTheme={setTheme} stations={stations} selectedStation={selectedStation} onThresholdSaved={fetchDashboard} isAdmin={isAdmin}/></section>}
     </main>
   </div>;
 }
