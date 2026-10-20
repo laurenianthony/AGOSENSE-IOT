@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api',
+    // Use the deployed API by default so a local Vite preview does not silently
+    // send authentication requests to a Laravel server that is not running.
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://agosense-iot-backend.onrender.com/api',
     timeout: 20000,
     headers: {
         'Content-Type': 'application/json',
