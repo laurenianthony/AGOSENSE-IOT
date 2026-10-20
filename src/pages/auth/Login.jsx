@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
-import api from '../api/axios';
-import Brand from './Brand';
+import api from '../../api/axios';
+import Brand from '../../components/Brand';
 
 export default function Login({ onLoginSuccess, onSwitchToRegister }) {
   const [email, setEmail] = useState('');

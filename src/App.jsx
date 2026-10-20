@@ -9,9 +9,10 @@ import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from './api/axios';
-import Login from './components/Login';
-import Register from './components/Register';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
 import Brand from './components/Brand';
+import { STRONG_PASSWORD_HTML_PATTERN, STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_PATTERN } from './utils/passwordPolicy';
 
 const CENTER = { latitude: 14.1417, longitude: 121.3167 };
 const EMPTY_STATIONS = [];
@@ -85,6 +86,10 @@ function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdS
   const changePassword = async (event) => {
     event.preventDefault();
     setPasswordFeedback(null);
+    if (!STRONG_PASSWORD_PATTERN.test(newPassword)) {
+      setPasswordFeedback({ type: 'error', text: STRONG_PASSWORD_MESSAGE });
+      return;
+    }
     if (newPassword !== passwordConfirmation) {
       setPasswordFeedback({ type: 'error', text: 'The new password and confirmation do not match.' });
       return;
@@ -118,7 +123,7 @@ function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdS
     } finally { setThresholdBusy(false); }
   };
 
-  const passwordField = (id, label, value, onChange, shown, setShown, autoComplete) => <label className="settings-field" htmlFor={id}>{label}<span className="settings-password-input"><input id={id} name={id} type={shown ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required minLength={id === 'settings-current-password' ? undefined : 8}/><button type="button" className="reveal-button" aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} onClick={() => setShown((visible) => !visible)}>{shown ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label>;
+  const passwordField = (id, label, value, onChange, shown, setShown, autoComplete) => <label className="settings-field" htmlFor={id}>{label}<span className="settings-password-input"><input id={id} name={id} type={shown ? 'text' : 'password'} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required minLength={id === 'settings-current-password' ? undefined : 8} pattern={id === 'settings-new-password' ? STRONG_PASSWORD_HTML_PATTERN : undefined} title={id === 'settings-new-password' ? STRONG_PASSWORD_MESSAGE : undefined}/><button type="button" className="reveal-button" aria-label={shown ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} onClick={() => setShown((visible) => !visible)}>{shown ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span>{id === 'settings-new-password' && <small className="password-policy-hint">{STRONG_PASSWORD_MESSAGE}</small>}</label>;
 
   return <section className="settings-page">
     <SectionHeading kicker="PREFERENCES & ACCOUNT" title="Settings" description="Manage account security and station alert limits."/>
@@ -649,9 +654,9 @@ export default function App() {
 
   return <div className="dashboard-shell">
     <header className="topbar">
-      <Brand />
+      <div className="topbar-left"><button ref={mobileMenuToggleRef} className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button><Brand href="#dashboard" onClick={() => selectTab('overview')}/></div>
       <nav id="dashboard-navigation" className={`tab-navigation ${mobileMenuOpen ? 'is-open' : ''}`} aria-label="Dashboard sections" inert={!mobileMenuOpen}>
-        <div className="drawer-heading"><Brand className="drawer-brand"/><button className="drawer-close" type="button" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={19}/></button></div>
+        <div className="drawer-heading"><Brand className="drawer-brand" href="#dashboard" onClick={() => selectTab('overview')}/><button className="drawer-close" type="button" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={19}/></button></div>
         <span className="drawer-group-label">MONITORING</span>
         {tabs.slice(0, 5).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>)}
         <span className="drawer-group-label settings-group">ACCOUNT</span>
@@ -659,7 +664,7 @@ export default function App() {
         <div className="mobile-drawer-footer"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={18}/><span>Sign out</span></button></div>
       </nav>
       {mobileMenuOpen && <button className="drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)}/>}
-      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><MapPin size={14}/><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station"><option value="">{stations.length ? 'Select station' : 'No stations'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button ref={mobileMenuToggleRef} className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button></div>
+      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station"><option value="">{stations.length ? 'Select station' : 'No stations'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button></div>
     </header>
     <main className="dashboard-main" id="dashboard">
       {error && <div className="alert-banner" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={fetchDashboard}>Retry</button></div>}
