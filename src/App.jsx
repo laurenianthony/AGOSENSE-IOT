@@ -16,6 +16,11 @@ import { STRONG_PASSWORD_HTML_PATTERN, STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_
 
 const CENTER = { latitude: 14.1417, longitude: 121.3167 };
 const EMPTY_STATIONS = [];
+const sortStations = (stations = []) => [...stations].sort((a, b) => {
+  const codeA = String(a.station_code || a.code || a.location_name || a.name || a.id || '');
+  const codeB = String(b.station_code || b.code || b.location_name || b.name || b.id || '');
+  return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+});
 const tabs = [
   { id: 'overview', label: 'Overview', icon: PanelsTopLeft },
   { id: 'telemetry', label: 'Live Sensor Readings', icon: Activity },
@@ -29,6 +34,10 @@ const formatValue = (value, digits = 1) => value == null || value === ''
   ? '--'
   : Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : value;
 const readingFor = (station) => station?.latest_reading || station?.latestReading || station?.sensor_readings?.[0] || station?.latest_sensor_reading || null;
+const stationConnectivityStatus = (station) => {
+  if (station?.status === 'maintenance') return 'maintenance';
+  return station?.status === 'active' ? 'online' : 'offline';
+};
 const PH_TIME_ZONE = 'Asia/Manila';
 const formatPhilippineTime = (value) => {
   if (!value) return '--';
@@ -64,6 +73,7 @@ const normalizedReportStatus = (status) => status === 'submitted' ? 'pending' : 
 const reportStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In Progress', resolved: 'Resolved' })[normalizedReportStatus(status)] || status;
 
 function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdSaved, isAdmin }) {
+  const sortedStations = sortStations(stations);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
@@ -137,7 +147,7 @@ function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdS
         <button className="settings-primary-button" type="submit" disabled={passwordBusy}>{passwordBusy ? 'Updating password…' : 'Update password'}</button>
       </form></section>
       <section className="settings-panel settings-threshold"><div className="settings-panel-heading"><Gauge size={20}/><span><strong>Alert threshold</strong><small>Trigger elevated water alerts at this station’s configured depth.</small></span></div>{isAdmin ? <form className="settings-form" onSubmit={saveThreshold}>
-        <label className="settings-field" htmlFor="settings-threshold-station">Station<select id="settings-threshold-station" name="station_id" value={thresholdStationId} onChange={(event) => { setThresholdStationId(event.target.value); const station = stations.find((item) => String(item.id) === event.target.value); setThreshold(String(station?.warning_threshold_cm ?? 60)); setThresholdFeedback(null); }} required><option value="" disabled>Select a station</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code} · {station.location_name}</option>)}</select></label>
+        <label className="settings-field" htmlFor="settings-threshold-station">Station<select id="settings-threshold-station" name="station_id" value={thresholdStationId} onChange={(event) => { setThresholdStationId(event.target.value); const station = stations.find((item) => String(item.id) === event.target.value); setThreshold(String(station?.warning_threshold_cm ?? 60)); setThresholdFeedback(null); }} required><option value="" disabled>Select a station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code} · {station.location_name}</option>)}</select></label>
         <label className="settings-field" htmlFor="settings-threshold-cm">Water level limit (cm)<input id="settings-threshold-cm" name="warning_threshold_cm" type="number" min="1" max="10000" step="0.1" value={threshold} onChange={(event) => setThreshold(event.target.value)} required/><small>Current limit: {thresholdStation?.warning_threshold_cm ?? 60} cm. Blockage detection also checks low flow.</small></label>
         {thresholdFeedback && <p className={`settings-feedback ${thresholdFeedback.type}`} role={thresholdFeedback.type === 'error' ? 'alert' : 'status'}>{thresholdFeedback.text}</p>}
         <button className="settings-primary-button" type="submit" disabled={!thresholdStationId || thresholdBusy}>{thresholdBusy ? 'Saving threshold…' : 'Save alert threshold'}</button>
@@ -147,6 +157,7 @@ function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdS
 }
 
 function RecordsTable({ stations, selectedStation }) {
+  const sortedStations = sortStations(stations);
   const [stationId, setStationId] = useState(selectedStation?.id ? String(selectedStation.id) : '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -244,7 +255,7 @@ function RecordsTable({ stations, selectedStation }) {
     <SectionHeading kicker="MONITORING HISTORY" title={historyTitle} description="Filter, review, and export saved measurements. Dates use Philippine Standard Time (UTC+8)." aside={<span className="records-count"><Database size={14}/>{pagination.total} records</span>}/>
     <button className="history-filter-toggle" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><SlidersHorizontal size={17}/>{filtersOpen ? 'Hide filters' : 'Filters, dates & export'}<ChevronRight size={16}/></button>
     <div className={`history-toolbar ${filtersOpen ? 'is-open' : ''}`}>
-      <label className="history-filter station-filter">Station<select id="history-station-filter" name="station_id" value={stationId} onChange={(event) => updateFilter(setStationId, event.target.value)}><option value="">All stations</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label>
+      <label className="history-filter station-filter">Station<select id="history-station-filter" name="station_id" value={stationId} onChange={(event) => updateFilter(setStationId, event.target.value)}><option value="">All stations</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label>
       <label className="history-filter">Date from<input id="history-date-from" name="date_from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => updateFilter(setDateFrom, event.target.value)}/></label>
       <label className="history-filter">Date to<input id="history-date-to" name="date_to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => updateFilter(setDateTo, event.target.value)}/></label>
       <label className="anomaly-filter"><input id="history-anomalies-only" name="anomalies_only" type="checkbox" checked={anomaliesOnly} onChange={(event) => updateFilter(setAnomaliesOnly, event.target.checked)}/><span>Show anomalies / blockages only</span></label>
@@ -276,6 +287,7 @@ function RecordsTable({ stations, selectedStation }) {
 }
 
 function FieldReportForm({ role, stations, selectedStationId, onStationChange, onSubmitted }) {
+  const sortedStations = sortStations(stations);
   const [subject, setSubject] = useState('');
   const [details, setDetails] = useState('');
   const [busy, setBusy] = useState(false);
@@ -308,7 +320,7 @@ function FieldReportForm({ role, stations, selectedStationId, onStationChange, o
   return <section className="report-section">
     <div className="report-intro"><p className="section-kicker">FIELD OPERATIONS</p><h2>Report a field issue</h2><p>{roleDescription}</p><div className="report-role-note"><MapPin size={15}/><span>Choose the station node where you observed the issue.</span></div></div>
     <form className="report-form" onSubmit={submitReport}>
-      <label htmlFor="report-station">Drainage station</label><select id="report-station" value={stationId} onChange={(event) => onStationChange(event.target.value || null)} required disabled={!stations.length}><option value="">{stations.length ? 'Select a station' : 'No stations available'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code} / {station.location_name}</option>)}</select>
+      <label htmlFor="report-station">Drainage station</label><select id="report-station" name="station_id" value={stationId} onChange={(event) => onStationChange(event.target.value || null)} required disabled={!stations.length}><option value="" disabled hidden>{stations.length ? 'Select a station' : 'No stations available'}</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code} / {station.location_name}</option>)}</select>
       <label htmlFor="issue-subject">Issue subject</label><input id="issue-subject" name="subject" value={subject} onChange={(event) => setSubject(event.target.value)} minLength={8} maxLength={120} placeholder="Debris buildup near roadside drain" required/>
       <label htmlFor="observation-details">Observation details</label><textarea id="observation-details" name="message" value={details} onChange={(event) => setDetails(event.target.value)} minLength={20} maxLength={2000} rows={4} placeholder="Describe what you observed and where it is located..." required/>
       {feedback && <p className={`report-feedback ${feedback.type}`} role="status">{feedback.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}<span>{feedback.message}</span></p>}
@@ -351,11 +363,11 @@ function StationCard({ station, stationId }) {
   const threshold = Number(station.warning_threshold_cm || 60);
   const condition = evaluateDrainageCondition(reading, station);
   const tone = conditionTone(condition.code);
-  const active = station.status === 'active';
+  const nodeStatus = stationConnectivityStatus(station);
   const syncedAt = reading?.recorded_at || reading?.created_at || reading?.timestamp;
   return <article className="station-card" id={stationId}>
-    <div className="station-heading"><div className="station-title"><span className="station-code">{station.station_code || 'UNASSIGNED'}</span><h2>{station.location_name || 'Unnamed location'}</h2><p className="location-line"><MapPin size={14}/>{station.latitude}, {station.longitude}</p></div><span className={`status-pill ${active ? 'online' : station.status === 'maintenance' ? 'maintenance' : 'offline'}`}><i/>{station.status || 'offline'}</span></div>
-    <div className="metrics-grid"><div className={`metric-tile water-${tone}`}><div className="metric-label"><Droplet size={16}/>Water level</div><div className="metric-value">{formatValue(water)} <small>cm</small></div><div className="level-track"><span style={{ width: `${Math.min(100, Math.max(0, Number(water) || 0))}%` }}/></div><div className="metric-hint">Warning at {formatValue(threshold, 0)} cm</div></div><div className="metric-tile flow-tile"><div className="metric-label"><Waves size={16}/>Flow rate</div><div className="metric-value">{formatValue(condition.flowRateLpm, 1)} <small>L/min</small></div><div className="metric-hint">Live sensor reading</div></div><div className={`blockage-tile ${tone}`}><span className="blockage-icon">{tone === 'critical' ? <ShieldAlert size={17}/> : tone === 'unknown' ? <CircleHelp size={17}/> : <Check size={17}/>}</span><span><small>Drainage condition</small><strong>{condition.label}</strong></span></div></div>
+    <div className="station-heading"><div className="station-title"><span className="station-code">{station.station_code || 'UNASSIGNED'}</span><h2>{station.location_name || 'Unnamed location'}</h2><p className="location-line"><MapPin size={14}/>{station.latitude}, {station.longitude}</p></div><span className={`status-pill ${nodeStatus}`}><i/>{nodeStatus === 'maintenance' ? 'Maintenance' : nodeStatus === 'online' ? 'Online' : 'Offline'}</span></div>
+    <div className="metrics-grid"><div className={`metric-tile water-${tone}`}><div className="metric-label"><Droplet size={16}/>Water level</div><div className="metric-value">{formatValue(water)} <small>cm</small></div><div className="level-track"><span style={{ width: `${Math.min(100, Math.max(0, Number(water) || 0))}%` }}/></div><div className="metric-hint">Warning at {formatValue(threshold, 0)} cm</div></div><div className="metric-tile flow-tile"><div className="metric-label"><Waves size={16}/>Flow rate</div><div className="metric-value">{formatValue(condition.flowRateLpm, 1)} <small>L/min</small></div><div className="metric-hint">Live sensor reading</div></div><div className={`blockage-tile ${tone}`}><span className="blockage-icon">{tone === 'critical' ? <ShieldAlert size={17}/> : tone === 'warning' ? <ArrowUp size={17}/> : tone === 'unknown' ? <CircleHelp size={17}/> : <Check size={17}/>}</span><span><small>Drainage condition</small><strong>{condition.label}</strong></span></div></div>
     <footer className="station-footer"><span><BatteryCharging size={15}/>{formatValue(reading?.battery_voltage, 2)} V</span><span className="sync-time">Last sync / {syncedAt ? formatPhilippineTime(syncedAt) : 'No readings yet'}</span></footer>
   </article>;
 }
@@ -363,6 +375,7 @@ function StationCard({ station, stationId }) {
 const blankStation = { station_code: '', location_name: '', latitude: CENTER.latitude, longitude: CENTER.longitude, status: 'active', warning_threshold_cm: 60 };
 
 function StationManagement({ stations, onSaved }) {
+  const sortedStations = sortStations(stations);
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState(blankStation);
   const [busy, setBusy] = useState(false);
@@ -373,19 +386,21 @@ function StationManagement({ stations, onSaved }) {
   const chooseStation = (event) => {
     const value = event.target.value;
     setSelectedId(value);
-    const selected = stations.find((station) => String(station.id) === value);
+    const selected = stations.find((station) => String(station.id) === String(value));
     setForm(selected ? {
-      station_code: selected.station_code || '',
+      station_code: selected.station_code || selected.code || '',
       location_name: selected.location_name || '',
-      latitude: selected.latitude ?? CENTER.latitude,
-      longitude: selected.longitude ?? CENTER.longitude,
+      latitude: selected.latitude ?? '',
+      longitude: selected.longitude ?? '',
       status: selected.status || 'active',
       warning_threshold_cm: selected.warning_threshold_cm ?? 60,
     } : blankStation);
     setFeedback(null);
   };
 
-  const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  const updateField = (event) => {
+    setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  };
   const saveStation = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -401,8 +416,11 @@ function StationManagement({ stations, onSaved }) {
         ? await api.patch(`/v1/admin/stations/${selectedId}`, payload)
         : await api.post('/v1/admin/stations', payload);
       setFeedback({ type: 'success', message: response.data.message || 'Station settings saved.' });
+      if (!editing) {
+        setSelectedId('');
+        setForm(blankStation);
+      }
       await onSaved();
-      if (!editing) { setSelectedId(''); setForm(blankStation); }
     } catch (err) {
       const errors = err.response?.data?.errors;
       setFeedback({ type: 'error', message: errors ? Object.values(errors).flat().join(' ') : err.response?.data?.message || 'Unable to save station settings.' });
@@ -425,16 +443,16 @@ function StationManagement({ stations, onSaved }) {
     } finally { setDeleting(false); }
   };
 
-  return <section className="station-management"><div className="station-management-heading"><div><span className="section-kicker">ADMINISTRATION</span><h3>Manage stations</h3><p>Add or edit nodes, locations, operating state, and water warning limits.</p></div><label className="station-select-label" htmlFor="station-edit-selector">Edit existing node<select id="station-edit-selector" name="station_edit_selector" value={selectedId} onChange={chooseStation}><option value="">Add a new station</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code} / {station.location_name}</option>)}</select></label></div>
+  return <section className="station-management"><div className="station-management-heading"><div><span className="section-kicker">ADMINISTRATION</span><h3>Manage stations</h3><p>Add or edit nodes, locations, operating state, and water warning limits.</p></div><label className="station-select-label" htmlFor="station-edit-selector">Edit existing node<select id="station-edit-selector" name="station_edit_selector" value={selectedId} onChange={chooseStation}><option value="">Add new station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code} / {station.location_name}</option>)}</select></label></div>
     <form className="station-admin-form" onSubmit={saveStation}>
-      <label>Station code<input name="station_code" value={form.station_code} onChange={updateField} maxLength={32} placeholder="CAL-DRN-02" required/></label>
+      <label>Station code<input name="station_code" value={form.station_code} onChange={updateField} maxLength={32} placeholder="CAL-DRN-01" required/></label>
       <label>Location name<input name="location_name" value={form.location_name} onChange={updateField} maxLength={255} placeholder="Drainage location" required/></label>
       <label>Latitude<input name="latitude" type="number" min="-90" max="90" step="any" value={form.latitude} onChange={updateField} required/></label>
       <label>Longitude<input name="longitude" type="number" min="-180" max="180" step="any" value={form.longitude} onChange={updateField} required/></label>
       <label>Node state<select name="status" value={form.status} onChange={updateField}><option value="active">Online</option><option value="maintenance">Maintenance</option><option value="offline">Offline</option></select></label>
       <label>Warning threshold (cm)<input name="warning_threshold_cm" type="number" min="1" max="10000" step="0.1" value={form.warning_threshold_cm} onChange={updateField} required/></label>
       {feedback && <p className={`report-feedback ${feedback.type}`} role="status">{feedback.type === 'success' ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}<span>{feedback.message}</span></p>}
-      <div className="station-form-actions"><button type="submit" className="report-submit" disabled={busy || deleting}>{busy ? 'Saving...' : editing ? 'Save station changes' : 'Add station'}</button>{editing && <><button type="button" className="secondary-action" onClick={() => chooseStation({ target: { value: '' } })}>Cancel edit</button><button type="button" className="delete-station-button" onClick={deleteStation} disabled={busy || deleting}>{deleting ? 'Deleting...' : 'Delete Station'}</button></>}</div>
+      <div className="station-form-actions"><button type="submit" className="report-submit" disabled={busy || deleting}>{busy ? 'Saving...' : editing ? 'Update station' : 'Add station'}</button>{editing && <><button type="button" className="secondary-action" onClick={() => chooseStation({ target: { value: '' } })}>Cancel edit</button><button type="button" className="delete-station-button" onClick={deleteStation} disabled={busy || deleting}>{deleting ? 'Deleting...' : 'Delete Station'}</button></>}</div>
     </form>
   </section>;
 }
@@ -452,8 +470,8 @@ function TelemetryCards({ station }) {
     <div className="live-grid">
       <article className="live-card"><div className="live-card-top"><span className="live-icon cyan"><Droplet size={18}/></span><span className={`condition-badge ${tone}`}>{tone === 'unknown' ? 'NO DATA' : hasHighWater ? 'WARNING' : 'NORMAL'}</span></div><p className="live-card-label">Water Level</p><div className="live-reading">{formatValue(current.water_level_cm)}<small> cm</small></div><div className="water-progress"><span style={{ width: `${Math.min(100, Math.max(0, water))}%` }}/></div><div className="live-card-foot"><span>0 cm</span><span>100 cm scale</span></div></article>
       <article className="live-card"><div className="live-card-top"><span className="live-icon blue"><Waves size={18}/></span><span className={`condition-badge ${tone === 'unknown' ? 'unknown' : flowPerMinute >= 1 ? 'normal' : 'warning'}`}>{tone === 'unknown' ? 'NO DATA' : flowPerMinute >= 1 ? 'FLOWING' : 'LOW FLOW'}</span></div><p className="live-card-label">Water Flow</p><div className="live-reading">{formatValue(flowPerMinute)}<small> L/min</small></div>{reading ? <div className="equalizer" aria-label="Flow visualization">{[34,58,76,47,90,64,38,70,50,82,44,63].map((height, index) => <i key={index} style={{ '--bar-height': `${height}%`, '--bar-delay': `${index * 65}ms` }}/>)}</div> : <p className="live-card-note">A flow reading will appear after this station reports data.</p>}<div className="live-card-foot"><span>Flow rate</span><span>Latest station reading</span></div></article>
-      <article className="live-card"><div className="live-card-top"><span className={`live-icon ${tone === 'critical' ? 'rose' : tone === 'warning' ? 'amber' : 'green'}`}>{tone === 'critical' ? <AlertTriangle size={18}/> : tone === 'unknown' ? <CircleHelp size={18}/> : <Check size={18}/>}</span><span className={`condition-badge ${tone}`}>{tone === 'critical' ? 'CRITICAL' : tone === 'warning' ? 'WARNING' : tone === 'unknown' ? 'NO DATA' : 'CLEAR'}</span></div><p className="live-card-label">Drainage Status</p><div className={`status-reading ${tone === 'critical' ? 'is-critical' : tone === 'warning' ? 'is-warning' : ''}`}>{tone === 'critical' ? <AlertTriangle size={23}/> : tone === 'warning' ? <ArrowUp size={25}/> : tone === 'unknown' ? <CircleHelp size={22}/> : <Check size={24}/>}<strong>{condition.label}</strong></div><p className="live-card-note">{station?.location_name || 'Select a station'}</p></article>
-      <article className="live-card"><div className="live-card-top"><span className={`live-icon ${isBlocked ? 'rose' : 'green'}`}><ShieldAlert size={18}/></span><span className={`condition-badge ${isBlocked ? 'critical' : tone === 'unknown' ? 'unknown' : 'normal'}`}>{isBlocked ? 'DETECTED' : tone === 'unknown' ? 'NO DATA' : 'SAFE'}</span></div><p className="live-card-label">Blockage Detection</p><div className={`status-reading ${isBlocked ? 'is-critical' : ''}`}><span className={`safe-indicator ${isBlocked ? 'unsafe' : ''}`}/><strong>{tone === 'unknown' ? 'Awaiting data' : isBlocked ? 'Blockage Detected' : 'Not Detected'}</strong></div><p className="live-card-note">Based on water depth and flow rate</p></article>
+      <article className="live-card"><div className="live-card-top"><span className={`live-icon ${tone === 'critical' ? 'rose' : tone === 'warning' ? 'amber' : tone === 'unknown' ? 'unknown' : 'green'}`}>{tone === 'critical' ? <AlertTriangle size={18}/> : tone === 'warning' ? <ArrowUp size={18}/> : tone === 'unknown' ? <CircleHelp size={18}/> : <Check size={18}/>}</span><span className={`condition-badge ${tone}`}>{tone === 'critical' ? 'CRITICAL' : tone === 'warning' ? 'WARNING' : tone === 'unknown' ? 'NO DATA' : 'CLEAR'}</span></div><p className="live-card-label">Drainage Status</p><div className={`status-reading ${tone === 'critical' ? 'is-critical' : tone === 'warning' ? 'is-warning' : ''}`}>{tone === 'critical' ? <AlertTriangle size={23}/> : tone === 'warning' ? <ArrowUp size={25}/> : tone === 'unknown' ? <CircleHelp size={22}/> : <Check size={24}/>}<strong>{condition.label}</strong></div><p className="live-card-note">{station?.location_name || 'Select a station'}</p></article>
+      <article className="live-card"><div className="live-card-top"><span className={`live-icon ${isBlocked ? 'rose' : tone === 'unknown' ? 'unknown' : 'green'}`}><ShieldAlert size={18}/></span><span className={`condition-badge ${isBlocked ? 'critical' : tone === 'unknown' ? 'unknown' : 'normal'}`}>{isBlocked ? 'DETECTED' : tone === 'unknown' ? 'NO DATA' : 'SAFE'}</span></div><p className="live-card-label">Blockage Detection</p><div className={`status-reading ${isBlocked ? 'is-critical' : ''}`}><span className={`safe-indicator ${isBlocked ? 'unsafe' : ''}`}/><strong>{tone === 'unknown' ? 'Awaiting data' : isBlocked ? 'Blockage Detected' : 'Not Detected'}</strong></div><p className="live-card-note">Based on water depth and flow rate</p></article>
     </div>
   </>;
 }
@@ -471,6 +489,7 @@ function MapStationFocus({ station }) {
 
 function StationMap({ stations, selectedStation, onOpenStation, theme = 'light' }) {
   const [tileError, setTileError] = useState(false);
+  const sortedStations = sortStations(stations);
   const createNodeIcon = (status, conditionCode) => {
     const conditionClass = status === 'offline' ? 'offline' : status === 'maintenance' ? 'attention' : conditionCode === 'blockage_detected' ? 'critical' : conditionCode === 'elevated_water' ? 'attention' : 'online';
     return L.divIcon({
@@ -491,13 +510,14 @@ function StationMap({ stations, selectedStation, onOpenStation, theme = 'light' 
       <MapContainer className="leaflet-station-map" center={[CENTER.latitude, CENTER.longitude]} zoom={14} scrollWheelZoom zoomControl attributionControl>
         <MapStationFocus station={selectedStation}/>
         <TileLayer key={tileUrl} className="dark-osm-tiles" eventHandlers={{ tileerror: handleTileError }} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url={tileUrl} subdomains="abc" maxZoom={19}/>
-        {stations.map((station, index) => {
+        {sortedStations.map((station, index) => {
           const latitude = Number(station.latitude) || CENTER.latitude;
           const longitude = Number(station.longitude) || CENTER.longitude;
           const reading = readingFor(station);
           const condition = evaluateDrainageCondition(reading, station);
-          return <Marker key={station.id || station.station_code || index} position={[latitude, longitude]} icon={createNodeIcon(station.status, condition.code)}>
-            <Popup className="station-leaflet-popup"><div className="leaflet-popup-content"><span className={`leaflet-status ${station.status === 'active' ? 'up' : station.status === 'maintenance' ? 'maintenance' : 'down'}`}><i/>{station.status || 'offline'}</span><strong>{station.station_code || 'Station node'}</strong><p>{station.location_name || 'Calauan, Laguna'}</p><span className={`leaflet-condition ${conditionTone(condition.code)}`}>{condition.label}</span><div className="leaflet-popup-metrics"><span><small>WATER DEPTH</small><b>{formatValue(reading?.water_level_cm)} cm</b></span><span><small>FLOW RATE</small><b>{formatValue(reading?.flow_rate, 2)} L/min</b></span></div><button type="button" onClick={() => onOpenStation(station)}>Open sensor readings <ChevronRight size={14}/></button></div></Popup>
+          const nodeStatus = stationConnectivityStatus(station);
+          return <Marker key={station.id || station.station_code || index} position={[latitude, longitude]} icon={createNodeIcon(nodeStatus, condition.code)}>
+            <Popup className="station-leaflet-popup"><div className="leaflet-popup-content"><span className={`leaflet-status ${nodeStatus === 'online' ? 'up' : nodeStatus === 'maintenance' ? 'maintenance' : 'down'}`}><i/>{nodeStatus}</span><strong className="text-slate-900 dark:text-white font-bold">{station.station_code || 'Station node'}</strong><p className="text-slate-600 dark:text-slate-400 font-medium">{station.location_name || 'Calauan, Laguna'}</p><span className={`leaflet-condition ${conditionTone(condition.code)}`}>{condition.label}</span><div className="leaflet-popup-metrics"><span><small className="text-slate-600 dark:text-slate-400 font-medium">WATER DEPTH</small><b className="text-slate-900 dark:text-white font-bold">{formatValue(reading?.water_level_cm)} cm</b></span><span><small className="text-slate-600 dark:text-slate-400 font-medium">FLOW RATE</small><b className="text-slate-900 dark:text-white font-bold">{formatValue(reading?.flow_rate, 2)} L/min</b></span></div><button type="button" onClick={() => onOpenStation(station)}>Open sensor readings <ChevronRight size={14}/></button></div></Popup>
           </Marker>;
         })}
       </MapContainer>
@@ -519,7 +539,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [networkLive, setNetworkLive] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    const savedTab = localStorage.getItem('agosense_active_tab');
+    return tabs.some(({ id }) => id === savedTab) ? savedTab : 'overview';
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedStationId, setSelectedStationId] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('agosense_theme') || 'light');
@@ -559,6 +582,8 @@ export default function App() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('user_role');
+    localStorage.removeItem('agosense_active_tab');
+    setActiveTab('overview');
     setToken(null); setUser(null); setDashboardData(null); setFieldReports([]); setError(''); setReportsError('');
   }, []);
 
@@ -639,16 +664,21 @@ export default function App() {
     : <Register onRegisterSuccess={acceptLogin} onSwitchToLogin={() => setAuthView('login')}/>;
 
   const stations = stationsForSelection;
+  const sortedStations = sortStations(stations);
   const isAdmin = user?.role === 'admin';
   const role = isAdmin ? 'admin' : 'viewer';
-  const onlineStations = stations.filter((station) => station.status === 'active').length;
-  const attentionStations = stations.filter((station) => station.status !== 'active' || ['blockage_detected', 'elevated_water'].includes(evaluateDrainageCondition(readingFor(station), station).code)).length;
-  const selectedStation = stations.find((station) => String(station.id) === String(selectedStationId)) || stations[0];
-  const selectTab = (tabId) => { setActiveTab(tabId); setMobileMenuOpen(false); };
+  const onlineStations = stations.filter((station) => stationConnectivityStatus(station) === 'online').length;
+  const attentionStations = stations.filter((station) => stationConnectivityStatus(station) !== 'online' || ['blockage_detected', 'elevated_water'].includes(evaluateDrainageCondition(readingFor(station), station).code)).length;
+  const selectedStation = stations.find((station) => String(station.id) === String(selectedStationId)) || sortedStations[0];
+  const selectTab = (tabId) => {
+    if (!tabs.some(({ id }) => id === tabId)) return;
+    setActiveTab(tabId);
+    localStorage.setItem('agosense_active_tab', tabId);
+    setMobileMenuOpen(false);
+  };
   const openStationTelemetry = (station) => {
     setSelectedStationId(String(station.id));
-    setActiveTab('telemetry');
-    setMobileMenuOpen(false);
+    selectTab('telemetry');
     window.setTimeout(() => document.getElementById(`station-detail-${station.id || station.station_code}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
   };
 
@@ -664,7 +694,7 @@ export default function App() {
         <div className="mobile-drawer-footer"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={18}/><span>Sign out</span></button></div>
       </nav>
       {mobileMenuOpen && <button className="drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)}/>}
-      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station"><option value="">{stations.length ? 'Select station' : 'No stations'}</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button></div>
+      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station" className="h-9 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-semibold shadow-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-colors"><option value="" disabled hidden>Select station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code || station.code || station.location_name || station.name || `Station ${station.id}`}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button></div>
     </header>
     <main className="dashboard-main" id="dashboard">
       {error && <div className="alert-banner" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={fetchDashboard}>Retry</button></div>}
@@ -672,11 +702,11 @@ export default function App() {
       {activeTab === 'overview' && <section className="tab-page overview-page">
         <div className="page-intro"><div><p className="eyebrow location-tag"><MapPin size={13}/> CALAUAN, LAGUNA</p><h1>Drainage overview</h1><p className="intro-copy">{userLoading ? 'Loading access profile...' : isAdmin ? 'Admin Portal: Full station control' : 'Resident Portal: Live municipal monitoring view'}</p></div><div className="intro-actions">{isAdmin && <button className="manage-stations-button" type="button" onClick={() => selectTab('map')}><Cog size={15}/>Manage Stations</button>}<button className="refresh-button" onClick={fetchDashboard} disabled={loading}><RefreshCw size={15} className={loading ? 'spin' : ''}/>{loading ? 'Refreshing live data' : 'Refresh live data'}</button></div></div>
         <div className="summary-row"><div><span className="summary-label">Monitored stations</span><strong>{stations.length.toString().padStart(2, '0')}</strong></div><div><span className="summary-label">Online</span><strong className="text-emerald">{onlineStations.toString().padStart(2, '0')}</strong></div><div><span className="summary-label">Attention required</span><strong className="text-amber">{attentionStations.toString().padStart(2, '0')}</strong></div><div className="summary-updated"><span className="summary-label">Access level</span><strong>{userLoading ? 'Checking role' : isAdmin ? 'Admin / full control' : 'Viewer / live view'}</strong><small>Auto refresh / 30 sec</small></div></div>
-        <div className="overview-grid"><section className="overview-panel"><div className="panel-heading"><div><span className="panel-kicker">FIELD NETWORK</span><h2>Station status</h2></div><button className="text-action" onClick={() => selectTab('telemetry')}>Live sensor readings <ChevronRight size={14}/></button></div>{stations.length ? <div className="overview-station-list">{stations.slice(0, 6).map((station, index) => <button className="overview-station-row" key={station.id || station.station_code || index} onClick={() => openStationTelemetry(station)}><span className={`station-health ${station.status === 'active' ? 'healthy' : station.status === 'maintenance' ? 'attention' : 'offline'}`}/><span className="overview-node-code">{station.station_code || 'UNASSIGNED'}</span><span className="overview-node-name">{station.location_name || 'Unnamed station'}</span><span className="overview-node-level">{formatValue(readingFor(station)?.water_level_cm)} <small>cm</small></span><ChevronRight size={14}/></button>)}</div> : <div className="inventory-empty">{loading ? 'Loading station nodes...' : 'No stations are currently available.'}</div>}</section>
+        <div className="overview-grid"><section className="overview-panel"><div className="panel-heading"><div><span className="panel-kicker">FIELD NETWORK</span><h2>Station status</h2></div><button className="text-action" onClick={() => selectTab('telemetry')}>Live sensor readings <ChevronRight size={14}/></button></div>{stations.length ? <div className="overview-station-list">{sortedStations.slice(0, 6).map((station, index) => <button className="overview-station-row" key={station.id || station.station_code || index} onClick={() => openStationTelemetry(station)}><span className={`station-health ${stationConnectivityStatus(station) === 'online' ? 'healthy' : stationConnectivityStatus(station) === 'maintenance' ? 'attention' : 'offline'}`}/><span className="overview-node-code">{station.station_code || 'UNASSIGNED'}</span><span className="overview-node-name">{station.location_name || 'Unnamed station'}</span><span className="overview-node-level">{formatValue(readingFor(station)?.water_level_cm)} <small>cm</small></span><ChevronRight size={14}/></button>)}</div> : <div className="inventory-empty">{loading ? 'Loading station nodes...' : 'No stations are currently available.'}</div>}</section>
           <section className="overview-panel network-panel"><div className="panel-heading"><div><span className="panel-kicker">SYSTEM HEALTH</span><h2>Operations summary</h2></div><span className={`system-state ${networkLive ? 'up' : 'down'}`}><i/>{networkLive ? 'OPERATIONAL' : 'CHECK LINK'}</span></div><div className="operation-metric"><span><Activity size={15}/>API connection</span><strong>{networkLive ? 'Connected' : 'Awaiting response'}</strong></div><div className="operation-metric"><span><Gauge size={15}/>Field stations</span><strong>{onlineStations} / {stations.length} online</strong></div><div className="operation-metric"><span><Clock3 size={15}/>Refresh cadence</span><strong>30 seconds</strong></div><button className="map-shortcut" onClick={() => selectTab('map')}><MapPin size={15}/>Open station map<ChevronRight size={14}/></button></section></div>
       </section>}
 
-      {activeTab === 'telemetry' && <section className="tab-page telemetry-page">{loading && !dashboardData ? <div className="loading-panel compact-loader"><span className="loader"/><p>Refreshing live data...</p></div> : <TelemetryCards station={selectedStation}/>}<div className="station-details"><div className="station-details-label"><PanelsTopLeft size={15}/><span>Station inventory</span><small>{stations.length} registered</small></div>{stations.length ? <div className="station-grid">{stations.map((station, index) => <StationCard key={station.id || station.station_code || index} station={station} stationId={`station-detail-${station.id || station.station_code || index}`}/>)}</div> : <div className="inventory-empty">No stations are currently available. Stations will appear after they are registered with the monitoring service.</div>}</div></section>}
+      {activeTab === 'telemetry' && <section className="tab-page telemetry-page">{loading && !dashboardData ? <div className="loading-panel compact-loader"><span className="loader"/><p>Refreshing live data...</p></div> : <TelemetryCards station={selectedStation}/>}<div className="station-details"><div className="station-details-label"><PanelsTopLeft size={15}/><span>Station inventory</span><small>{stations.length} registered</small></div>{stations.length ? <div className="station-grid">{sortedStations.map((station, index) => <StationCard key={station.id || station.station_code || index} station={station} stationId={`station-detail-${station.id || station.station_code || index}`}/>)}</div> : <div className="inventory-empty">No stations are currently available. Stations will appear after they are registered with the monitoring service.</div>}</div></section>}
       {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry} theme={theme}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
       {activeTab === 'reports' && <section className="tab-page reports-page"><div className="page-intro compact-intro"><div><p className="eyebrow">FIELD OPERATIONS</p><h1>Field reports</h1><p className="intro-copy">Submit a local observation and review reports available to your account.</p></div><span className="role-context">{isAdmin ? 'ADMIN VIEW / ALL SUBMISSIONS' : 'VIEWER / YOUR SUBMISSIONS'}</span></div><FieldReportForm role={role} stations={stations} selectedStationId={selectedStation?.id ? String(selectedStation.id) : ''} onStationChange={setSelectedStationId} onSubmitted={fetchFieldReports}/><ReportsList reports={fieldReports} loading={reportsLoading} error={reportsError} isAdmin={isAdmin} onStatusUpdate={updateReportStatus}/></section>}
       {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable key={selectedStation?.id || 'all-stations'} stations={stations} selectedStation={selectedStation}/></section>}

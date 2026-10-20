@@ -6,6 +6,36 @@
   color: #152438;
 }
 :root[data-theme="dark"] { color-scheme: dark; }
+
+/* Keep Leaflet's content readable against its theme-specific popup surface. */
+[data-theme="light"] .leaflet-station-map .leaflet-popup-content strong,
+[data-theme="light"] .leaflet-station-map .leaflet-popup-metrics b { color: #0f172a !important; font-weight: 700; }
+[data-theme="light"] .leaflet-station-map .leaflet-popup-content p,
+[data-theme="light"] .leaflet-station-map .leaflet-popup-metrics small { color: #475569 !important; font-weight: 500; }
+[data-theme="dark"] .leaflet-station-map .leaflet-popup-content strong,
+[data-theme="dark"] .leaflet-station-map .leaflet-popup-metrics b { color: #fff !important; font-weight: 700; }
+[data-theme="dark"] .leaflet-station-map .leaflet-popup-content p,
+[data-theme="dark"] .leaflet-station-map .leaflet-popup-metrics small { color: #94a3b8 !important; font-weight: 500; }
+
+/* Login page follows the cyan/slate AGOSENSE controls in both themes. */
+.auth-cyan .auth-kicker { color: #155e75 !important; font-weight: 700; }
+.auth-cyan .auth-submit { height: 44px; border-radius: 0.5rem; color: #fff !important; background: #0e7490 !important; font-size: 0.875rem; font-weight: 600; box-shadow: 0 1px 2px rgb(15 23 42 / 0.08); }
+.auth-cyan .auth-submit:hover { background: #155e75 !important; }
+.auth-cyan .input-wrap { height: 40px; min-height: 40px; border: 1px solid #cbd5e1 !important; border-radius: 0.5rem; background: #fff !important; color: #475569 !important; }
+.auth-cyan .input-wrap:focus-within { border-color: #06b6d4 !important; box-shadow: 0 0 0 2px rgb(6 182 212 / 0.28) !important; }
+.auth-cyan .input-wrap input { min-height: 0; color: #0f172a !important; font-size: 0.875rem; font-weight: 500; }
+.auth-cyan .input-wrap input::placeholder { color: #64748b !important; opacity: 1; }
+.auth-cyan .auth-switch button { color: #0e7490 !important; font-weight: 600; }
+.auth-cyan .auth-switch button:hover { color: #155e75 !important; }
+.auth-cyan .auth-footer-dot { background: #06b6d4 !important; box-shadow: 0 0 8px rgb(6 182 212 / 0.45) !important; }
+[data-theme="dark"] .auth-cyan .auth-kicker { color: #22d3ee !important; }
+[data-theme="dark"] .auth-cyan .auth-submit { background: #0891b2 !important; }
+[data-theme="dark"] .auth-cyan .auth-submit:hover { background: #06b6d4 !important; }
+[data-theme="dark"] .auth-cyan .input-wrap { border-color: #334155 !important; background: #0f172a !important; }
+[data-theme="dark"] .auth-cyan .input-wrap input { color: #f1f5f9 !important; }
+[data-theme="dark"] .auth-cyan .input-wrap input::placeholder { color: #94a3b8 !important; }
+[data-theme="dark"] .auth-cyan .auth-switch button { color: #22d3ee !important; }
+[data-theme="dark"] .auth-cyan .auth-switch button:hover { color: #67e8f9 !important; }
 * { font-family: inherit; }
 button, input, select, textarea { font: inherit; }
 button, a, select, input[type="checkbox"] { -webkit-tap-highlight-color: transparent; }
@@ -743,3 +773,307 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 /* Password policy helper text stays readable and cannot alter field sizing on theme change. */
 .password-policy-hint { display: block; margin: 5px 0 0; color: #475569; font-size: 11px; font-weight: 500; line-height: 1.45; }
 [data-theme="dark"] .password-policy-hint { color: #cbd5e1; }
+
+/* Keep the map, report, history, and settings geometry independent of theme. */
+:where(.station-map-frame, .report-section, .reports-list-panel, .records-container,
+  .record-card, .history-toolbar, .settings-panel, .loading-panel, .empty-panel) {
+  box-sizing: border-box;
+  border-style: solid;
+  border-width: 1px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.settings-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 16px !important;
+  min-width: 0;
+  padding: 16px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.settings-appearance .theme-setting-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+}
+
+.settings-field > small { font-weight: 450; }
+
+@media (max-width: 760px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Match the light theme's viewport geometry in dark mode; themes only repaint. */
+.topbar {
+  box-sizing: border-box;
+  height: 68px !important;
+}
+
+@media (max-width: 820px) {
+  .topbar { height: 64px !important; }
+}
+
+.dashboard-main {
+  box-sizing: border-box;
+  width: min(1440px, 100%);
+  max-width: 1440px !important;
+}
+
+/* Station selector keeps the same box model in both themes. */
+.global-station-switcher {
+  box-sizing: border-box;
+  min-height: 48px !important;
+  gap: 6px !important;
+  padding: 0 9px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-radius: 8px !important;
+}
+
+.global-station-switcher select {
+  box-sizing: border-box;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  font-size: 14px !important;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .global-station-switcher { max-width: 124px !important; }
+  .global-station-switcher select {
+    min-width: 62px !important;
+    max-width: 88px !important;
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .global-station-switcher {
+    max-width: 76px !important;
+    padding-inline: 4px !important;
+  }
+  .global-station-switcher select {
+    min-width: 46px !important;
+    max-width: 55px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* Elevated water is a warning state; keep its label readable in daylight. */
+[data-theme="light"] .blockage-tile.warning strong,
+[data-theme="light"] .status-reading.is-warning,
+[data-theme="light"] .status-reading.is-warning strong {
+  color: #b45309 !important;
+  font-weight: 600;
+  opacity: 1 !important;
+}
+
+/* The select itself is the trigger; its parent label only provides layout. */
+.global-station-switcher {
+  min-height: 0 !important;
+  max-width: none !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.global-station-switcher select {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 95px !important;
+  max-width: 150px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 6px 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 8%);
+  outline: none;
+  color-scheme: light;
+}
+
+.global-station-switcher select:focus {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 0 1px #06b6d4;
+}
+
+.global-station-switcher select option { background: #fff; color: #0f172a; }
+
+[data-theme="dark"] .global-station-switcher select {
+  border-color: #1e293b !important;
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+  color-scheme: dark;
+}
+
+[data-theme="dark"] .global-station-switcher select option {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+/* Shared form control sizing, with theme changes limited to paint and focus. */
+.report-form input,
+.report-form select,
+.station-admin-form input,
+.station-admin-form select,
+.station-select-label select,
+.history-filter input,
+.history-filter select,
+.settings-field > input,
+.settings-field > select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.report-form textarea {
+  box-sizing: border-box;
+  min-height: 112px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-password-input {
+  box-sizing: border-box;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.settings-password-input input {
+  min-height: 38px !important;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 14px !important;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .report-form input,
+[data-theme="dark"] .report-form select,
+[data-theme="dark"] .station-admin-form input,
+[data-theme="dark"] .station-admin-form select,
+[data-theme="dark"] .station-select-label select,
+[data-theme="dark"] .history-filter input,
+[data-theme="dark"] .history-filter select,
+[data-theme="dark"] .settings-field > input,
+[data-theme="dark"] .settings-field > select,
+[data-theme="dark"] .report-form textarea,
+[data-theme="dark"] .settings-password-input {
+  border-color: #475569 !important;
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+  color-scheme: dark;
+}
+
+[data-theme="light"] .report-form input::placeholder,
+[data-theme="light"] .report-form textarea::placeholder,
+[data-theme="light"] .station-admin-form input::placeholder,
+[data-theme="light"] .settings-password-input input::placeholder { color: #64748b !important; opacity: 1; }
+
+/* Status colors remain distinct on the light cards and their dark equivalents. */
+[data-theme="light"] .live-card,
+[data-theme="light"] .station-card,
+[data-theme="light"] .metric-tile,
+[data-theme="light"] .blockage-tile { background: #f8fafc !important; }
+[data-theme="dark"] .live-card,
+[data-theme="dark"] .station-card,
+[data-theme="dark"] .metric-tile,
+[data-theme="dark"] .blockage-tile { background: rgb(30 41 59 / 50%) !important; }
+
+[data-theme="light"] .live-icon.green,
+[data-theme="light"] .blockage-tile.normal .blockage-icon { color: #047857 !important; background: #d1fae5 !important; }
+[data-theme="light"] .live-icon.amber,
+[data-theme="light"] .blockage-tile.warning .blockage-icon { color: #b45309 !important; background: #fef3c7 !important; }
+[data-theme="light"] .live-icon.rose,
+[data-theme="light"] .blockage-tile.critical .blockage-icon { color: #be123c !important; background: #ffe4e6 !important; }
+[data-theme="light"] .live-icon.unknown,
+[data-theme="light"] .blockage-tile.unknown .blockage-icon { color: #475569 !important; background: #e2e8f0 !important; }
+[data-theme="dark"] .live-icon.green,
+[data-theme="dark"] .blockage-tile.normal .blockage-icon { color: #34d399 !important; background: rgb(6 78 59 / 40%) !important; }
+[data-theme="dark"] .live-icon.amber,
+[data-theme="dark"] .blockage-tile.warning .blockage-icon { color: #fbbf24 !important; background: rgb(120 53 15 / 40%) !important; }
+[data-theme="dark"] .live-icon.rose,
+[data-theme="dark"] .blockage-tile.critical .blockage-icon { color: #fb7185 !important; background: rgb(136 19 55 / 40%) !important; }
+[data-theme="dark"] .live-icon.unknown,
+[data-theme="dark"] .blockage-tile.unknown .blockage-icon { color: #cbd5e1 !important; background: rgb(51 65 85 / 50%) !important; }
+
+[data-theme="light"] .condition-badge.normal { border-color: #a7f3d0; background: #d1fae5; color: #047857; }
+[data-theme="light"] .condition-badge.warning { border-color: #fde68a; background: #fef3c7; color: #b45309; }
+[data-theme="light"] .condition-badge.critical { border-color: #fecdd3; background: #ffe4e6; color: #be123c; }
+[data-theme="light"] .condition-badge.unknown { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
+[data-theme="dark"] .condition-badge.normal { border-color: #065f46; background: rgb(6 78 59 / 40%); color: #34d399; }
+[data-theme="dark"] .condition-badge.warning { border-color: #92400e; background: rgb(120 53 15 / 40%); color: #fbbf24; }
+[data-theme="dark"] .condition-badge.critical { border-color: #9f1239; background: rgb(136 19 55 / 40%); color: #fb7185; }
+[data-theme="dark"] .condition-badge.unknown { border-color: #475569; background: rgb(51 65 85 / 50%); color: #cbd5e1; }
+[data-theme="light"] .blockage-tile.normal strong { color: #047857 !important; }
+[data-theme="dark"] .blockage-tile.normal strong { color: #34d399 !important; }
+[data-theme="dark"] .blockage-tile.warning strong { color: #fbbf24 !important; }
+[data-theme="dark"] .blockage-tile.critical strong { color: #fb7185 !important; }
+[data-theme="light"] .status-pill.online { border-color: #a7f3d0; background: #d1fae5; color: #047857; }
+[data-theme="light"] .status-pill.maintenance { border-color: #fde68a; background: #fef3c7; color: #b45309; }
+[data-theme="light"] .status-pill.offline { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
+
+:root[data-theme] .report-form input,
+:root[data-theme] .report-form select,
+:root[data-theme] .station-admin-form input,
+:root[data-theme] .station-admin-form select,
+:root[data-theme] .station-select-label select,
+:root[data-theme] .history-filter input,
+:root[data-theme] .history-filter select,
+:root[data-theme] .settings-field > input,
+:root[data-theme] .settings-field > select {
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+@media (max-width: 760px) {
+  .global-station-switcher select {
+    min-width: 62px !important;
+    max-width: 88px !important;
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .global-station-switcher select {
+    min-width: 46px !important;
+    max-width: 55px !important;
+    padding-inline: 6px !important;
+    font-size: 9px !important;
+  }
+}
