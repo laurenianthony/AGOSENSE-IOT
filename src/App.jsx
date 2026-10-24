@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUp, BatteryCharging, Check, CheckCircle2,
   ChevronRight, CircleHelp, Clock3, Clock4, Cog, Database, Droplet,
-  FileDown, Gauge, LogOut, MapPin, Menu, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
-  Waves, X, LocateFixed, Sun, Moon, Settings, SlidersHorizontal, KeyRound, Eye, EyeOff,
+  FileDown, Gauge, LogOut, MapPin, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
+  Waves, LocateFixed, Sun, Moon, Settings, SlidersHorizontal, KeyRound, Eye, EyeOff, Menu, X,
 } from 'lucide-react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
@@ -12,10 +12,16 @@ import api from './api/axios';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Brand from './components/Brand';
+import Sidebar from './components/Sidebar';
 import { STRONG_PASSWORD_HTML_PATTERN, STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_PATTERN } from './utils/passwordPolicy';
 
 const CENTER = { latitude: 14.1417, longitude: 121.3167 };
 const EMPTY_STATIONS = [];
+const asList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  return [];
+};
 const sortStations = (stations = []) => [...stations].sort((a, b) => {
   const codeA = String(a.station_code || a.code || a.location_name || a.name || a.id || '');
   const codeB = String(b.station_code || b.code || b.location_name || b.name || b.id || '');
@@ -59,6 +65,25 @@ const evaluateDrainageCondition = (reading, station) => {
 };
 const conditionTone = (code) => code === 'blockage_detected' ? 'critical' : code === 'elevated_water' ? 'warning' : code === 'normal' ? 'normal' : 'unknown';
 
+class DashboardErrorBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return <main className="app-crash-state" role="alert">
+      <div><AlertTriangle size={24}/><h1>Dashboard could not be displayed</h1>
+        <p>An unexpected display error occurred after sign-in. Reload the page to try again.</p>
+        <details><summary>Display error details</summary><code>{this.state.error?.message || 'Unknown rendering error'}</code></details>
+        <button type="button" onClick={() => window.location.reload()}>Reload dashboard</button>
+      </div>
+    </main>;
+  }
+}
+
 function SectionHeading({ kicker, title, description, aside }) {
   return <div className="section-heading-row"><div><p className="section-kicker">{kicker}</p><h2>{title}</h2>{description && <p className="section-description">{description}</p>}</div>{aside}</div>;
 }
@@ -87,11 +112,6 @@ function SettingsPage({ theme, setTheme, stations, selectedStation, onThresholdS
   const [threshold, setThreshold] = useState(String(thresholdStation?.warning_threshold_cm ?? 60));
   const [thresholdBusy, setThresholdBusy] = useState(false);
   const [thresholdFeedback, setThresholdFeedback] = useState(null);
-
-  useEffect(() => {
-    setThresholdStationId(selectedStation?.id ? String(selectedStation.id) : '');
-    setThreshold(String(selectedStation?.warning_threshold_cm ?? 60));
-  }, [selectedStation?.id, selectedStation?.warning_threshold_cm]);
 
   const changePassword = async (event) => {
     event.preventDefault();
@@ -161,7 +181,7 @@ function RecordsTable({ stations, selectedStation }) {
   const [stationId, setStationId] = useState(selectedStation?.id ? String(selectedStation.id) : '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [period, setPeriod] = useState('raw');
+  const period = 'daily';
   const [anomaliesOnly, setAnomaliesOnly] = useState(false);
   const [records, setRecords] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0, from: null, to: null });
@@ -248,11 +268,10 @@ function RecordsTable({ stations, selectedStation }) {
     } finally { setExporting(''); }
   };
 
-  const changePeriod = (value) => updateFilter(setPeriod, value);
-  const historyTitle = period === 'raw' ? 'Recent Sensor Records' : 'Daily Sensor Summaries';
+  const historyTitle = 'Daily Sensor Summaries';
 
   return <section className="records-section">
-    <SectionHeading kicker="MONITORING HISTORY" title={historyTitle} description="Filter, review, and export saved measurements. Dates use Philippine Standard Time (UTC+8)." aside={<span className="records-count"><Database size={14}/>{pagination.total} records</span>}/>
+    <SectionHeading kicker="MONITORING HISTORY" title={historyTitle} description="One compact daily summary per station, with average readings and status. Dates use Philippine Standard Time (UTC+8)." aside={<span className="records-count"><Database size={14}/>{pagination.total} days</span>}/>
     <button className="history-filter-toggle" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><SlidersHorizontal size={17}/>{filtersOpen ? 'Hide filters' : 'Filters, dates & export'}<ChevronRight size={16}/></button>
     <div className={`history-toolbar ${filtersOpen ? 'is-open' : ''}`}>
       <label className="history-filter station-filter">Station<select id="history-station-filter" name="station_id" value={stationId} onChange={(event) => updateFilter(setStationId, event.target.value)}><option value="">All stations</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code}</option>)}</select></label>
@@ -261,12 +280,11 @@ function RecordsTable({ stations, selectedStation }) {
       <label className="anomaly-filter"><input id="history-anomalies-only" name="anomalies_only" type="checkbox" checked={anomaliesOnly} onChange={(event) => updateFilter(setAnomaliesOnly, event.target.checked)}/><span>Show anomalies / blockages only</span></label>
       <div className="export-actions"><button type="button" onClick={() => exportRecords('csv')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'csv' ? 'Preparing CSV…' : 'Export CSV'}</button><button type="button" onClick={() => exportRecords('pdf')} disabled={Boolean(exporting)}><FileDown size={14}/>{exporting === 'pdf' ? 'Preparing PDF…' : 'Export PDF'}</button></div>
     </div>
-    <div className="period-switcher" role="group" aria-label="Historical data resolution">{[['raw', 'Raw Data'], ['daily', 'Daily Summaries']].map(([value, label]) => <button key={value} type="button" className={period === value ? 'active' : ''} aria-pressed={period === value} onClick={() => changePeriod(value)}>{label}</button>)}</div>
     {error && <div className="history-error" role="alert">{error}</div>}
     <div className="records-container">
       {loading ? <div className="records-state"><span className="loader"/><strong>Loading sensor history</strong><p>Fetching {period} readings for {selectedStationRecord?.station_code || 'the selected station'}.</p></div>
         : !loading && records.length === 0 ? <div className="records-state"><span className="records-state-icon"><Clock3 size={19}/></span><strong>{error ? 'History is unavailable' : anomaliesOnly ? 'No anomalies in this date range' : 'No readings match these filters'}</strong><p>{error || `Saved ${period} readings${selectedStationRecord ? ` for ${selectedStationRecord.station_code}` : ''} will appear here when they match your filters.`}</p></div>
-          : <><div className="table-scroll virtual-records" ref={tableViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>WATER LEVEL</th><th>FLOW RATE</th><th>STATUS</th></tr></thead><tbody>
+          : <><div className="table-scroll virtual-records" ref={tableViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><table className="records-table"><thead><tr><th>DATE &amp; TIME</th><th>DAILY AVG WATER</th><th>DAILY AVG FLOW</th><th>STATUS</th></tr></thead><tbody>
             {startIndex > 0 && <tr aria-hidden="true" className="virtual-spacer"><td colSpan="4" style={{ height: startIndex * rowHeight }}/></tr>}
             {visibleRecords.map((record) => {
               const at = record.recorded_at || record.created_at || record.timestamp;
@@ -279,7 +297,7 @@ function RecordsTable({ stations, selectedStation }) {
             const condition = record.drainage_condition || evaluateDrainageCondition(record, record.station || selectedStationRecord);
             const recordStation = record.station || selectedStationRecord;
             const statusLabel = condition.code === 'normal' ? 'Normal' : condition.code === 'elevated_water' ? 'Warning' : condition.code === 'blockage_detected' ? 'Blockage' : 'Awaiting data';
-            return <article className="record-card" key={`mobile-${period}-${record.id}-${at}`}><div className="record-card-heading"><div><strong>{recordStation?.location_name || recordStation?.station_code || 'Drainage station'}</strong><small>{recordStation?.station_code || 'Station'}</small></div><RecordStatus status={statusLabel}/></div><p className="record-card-time"><Clock3 size={14}/>{formatPhilippineTime(at)}</p><div className="record-card-metrics"><div><span>Water level</span><strong>{formatValue(record.water_level_cm)} <small>cm</small></strong></div><div><span>Flow rate</span><strong>{formatValue(record.flow_rate, 2)} <small>L/min</small></strong></div></div></article>;
+            return <article className="record-card" key={`mobile-${period}-${record.id}-${at}`}><div className="record-card-heading"><div><strong>{recordStation?.location_name || recordStation?.station_code || 'Drainage station'}</strong><small>{recordStation?.station_code || 'Station'}</small></div><RecordStatus status={statusLabel}/></div><p className="record-card-time"><Clock3 size={14}/>{formatPhilippineTime(at)}</p><p className="record-card-time">Daily summary · {record.readings_count || 0} sensor readings</p><div className="record-card-metrics"><div><span>Average water level</span><strong>{formatValue(record.water_level_cm)} <small>cm</small></strong></div><div><span>Average flow rate</span><strong>{formatValue(record.flow_rate, 2)} <small>L/min</small></strong></div></div></article>;
           })}</div></>}
     </div>
     <div className="history-pagination"><span>{pagination.total ? `Showing ${pagination.from || 0}–${pagination.to || 0} of ${pagination.total}` : 'No records'}</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button><span>Page {pagination.current_page || page} of {pagination.last_page || 1}</span><button type="button" disabled={page >= pagination.last_page || loading} onClick={() => setPage((current) => Math.min(pagination.last_page, current + 1))}>Next</button></div></div>
@@ -487,7 +505,7 @@ function MapStationFocus({ station }) {
   return null;
 }
 
-function StationMap({ stations, selectedStation, onOpenStation, theme = 'light' }) {
+function StationMap({ stations, selectedStation, onOpenStation }) {
   const [tileError, setTileError] = useState(false);
   const sortedStations = sortStations(stations);
   const createNodeIcon = (status, conditionCode) => {
@@ -500,7 +518,6 @@ function StationMap({ stations, selectedStation, onOpenStation, theme = 'light' 
     });
   };
 
-  useEffect(() => { setTileError(false); }, [theme]);
   const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   const handleTileError = () => setTileError(true);
 
@@ -544,6 +561,8 @@ export default function App() {
     return tabs.some(({ id }) => id === savedTab) ? savedTab : 'overview';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Navigation is a drawer at every viewport size; the desktop rail is no longer permanent.
+  const isMobileNav = true;
   const [selectedStationId, setSelectedStationId] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('agosense_theme') || 'light');
   const mobileMenuToggleRef = useRef(null);
@@ -592,7 +611,7 @@ export default function App() {
     setLoading(true);
     try {
       const { data } = await api.get('/v1/dashboard');
-      const loadedStations = data.stations || data.data?.stations || [];
+      const loadedStations = asList(data.stations || data.data?.stations || data.data || []);
       setSelectedStationId((current) => current && loadedStations.some((station) => String(station.id) === String(current))
         ? current
         : loadedStations[0] ? String(loadedStations[0].id) : null);
@@ -657,7 +676,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [token, activeTab, fetchFieldReports]);
 
-  const stationsForSelection = dashboardData?.stations || dashboardData?.data?.stations || EMPTY_STATIONS;
+  const stationsForSelection = asList(dashboardData?.stations || dashboardData?.data?.stations || EMPTY_STATIONS);
 
   if (!token) return authView === 'login'
     ? <Login onLoginSuccess={acceptLogin} onSwitchToRegister={() => setAuthView('register')}/>
@@ -682,21 +701,25 @@ export default function App() {
     window.setTimeout(() => document.getElementById(`station-detail-${station.id || station.station_code}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
   };
 
-  return <div className="dashboard-shell">
+  return <DashboardErrorBoundary><div className="dashboard-shell">
     <header className="topbar">
-      <div className="topbar-left"><button ref={mobileMenuToggleRef} className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button><Brand href="#dashboard" onClick={() => selectTab('overview')}/></div>
-      <nav id="dashboard-navigation" className={`tab-navigation ${mobileMenuOpen ? 'is-open' : ''}`} aria-label="Dashboard sections" inert={!mobileMenuOpen}>
-        <div className="drawer-heading"><Brand className="drawer-brand" href="#dashboard" onClick={() => selectTab('overview')}/><button className="drawer-close" type="button" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={19}/></button></div>
-        <span className="drawer-group-label">MONITORING</span>
-        {tabs.slice(0, 5).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>)}
-        <span className="drawer-group-label settings-group">ACCOUNT</span>
-        {tabs.slice(5).map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`tab-button ${activeTab === id ? 'active' : ''}`} onClick={() => selectTab(id)} aria-current={activeTab === id ? 'page' : undefined}><Icon size={18}/><span>{label}</span></button>)}
-        <div className="mobile-drawer-footer"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" onClick={logout}><LogOut size={18}/><span>Sign out</span></button></div>
-      </nav>
-      {mobileMenuOpen && <button className="drawer-backdrop" type="button" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)}/>}
+      <div className="topbar-left"><button ref={mobileMenuToggleRef} className="mobile-menu-toggle text-slate-800 dark:text-white" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button><Brand href="#dashboard" onClick={() => selectTab('overview')}/></div>
       <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station" className="h-9 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-semibold shadow-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-colors"><option value="" disabled hidden>Select station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code || station.code || station.location_name || station.name || `Station ${station.id}`}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button></div>
     </header>
-    <main className="dashboard-main" id="dashboard">
+    <div className="dashboard-workspace">
+      <Sidebar
+        tabs={tabs}
+        activeTab={activeTab}
+        onSelectTab={selectTab}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        isMobile={isMobileNav}
+        networkLive={networkLive}
+        isAdmin={isAdmin}
+        userLoading={userLoading}
+        onLogout={logout}
+      />
+      <main className="dashboard-main" id="dashboard">
       {error && <div className="alert-banner" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={fetchDashboard}>Retry</button></div>}
 
       {activeTab === 'overview' && <section className="tab-page overview-page">
@@ -707,10 +730,11 @@ export default function App() {
       </section>}
 
       {activeTab === 'telemetry' && <section className="tab-page telemetry-page">{loading && !dashboardData ? <div className="loading-panel compact-loader"><span className="loader"/><p>Refreshing live data...</p></div> : <TelemetryCards station={selectedStation}/>}<div className="station-details"><div className="station-details-label"><PanelsTopLeft size={15}/><span>Station inventory</span><small>{stations.length} registered</small></div>{stations.length ? <div className="station-grid">{sortedStations.map((station, index) => <StationCard key={station.id || station.station_code || index} station={station} stationId={`station-detail-${station.id || station.station_code || index}`}/>)}</div> : <div className="inventory-empty">No stations are currently available. Stations will appear after they are registered with the monitoring service.</div>}</div></section>}
-      {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry} theme={theme}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
+      {activeTab === 'map' && <section className="tab-page"><StationMap stations={stations} selectedStation={selectedStation} onOpenStation={openStationTelemetry}/>{isAdmin && <StationManagement stations={stations} onSaved={fetchDashboard}/>}</section>}
       {activeTab === 'reports' && <section className="tab-page reports-page"><div className="page-intro compact-intro"><div><p className="eyebrow">FIELD OPERATIONS</p><h1>Field reports</h1><p className="intro-copy">Submit a local observation and review reports available to your account.</p></div><span className="role-context">{isAdmin ? 'ADMIN VIEW / ALL SUBMISSIONS' : 'VIEWER / YOUR SUBMISSIONS'}</span></div><FieldReportForm role={role} stations={stations} selectedStationId={selectedStation?.id ? String(selectedStation.id) : ''} onStationChange={setSelectedStationId} onSubmitted={fetchFieldReports}/><ReportsList reports={fieldReports} loading={reportsLoading} error={reportsError} isAdmin={isAdmin} onStatusUpdate={updateReportStatus}/></section>}
       {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable key={selectedStation?.id || 'all-stations'} stations={stations} selectedStation={selectedStation}/></section>}
-      {activeTab === 'settings' && <section className="tab-page"><SettingsPage theme={theme} setTheme={setTheme} stations={stations} selectedStation={selectedStation} onThresholdSaved={fetchDashboard} isAdmin={isAdmin}/></section>}
-    </main>
-  </div>;
+      {activeTab === 'settings' && <section className="tab-page"><SettingsPage key={`${selectedStation?.id || 'no-station'}-${selectedStation?.warning_threshold_cm ?? 60}`} theme={theme} setTheme={setTheme} stations={stations} selectedStation={selectedStation} onThresholdSaved={fetchDashboard} isAdmin={isAdmin}/></section>}
+      </main>
+    </div>
+  </div></DashboardErrorBoundary>;
 }
