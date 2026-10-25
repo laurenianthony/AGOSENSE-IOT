@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, RefreshCw, UserCheck } from 'lucide-react';
+import { Check, RefreshCw, UserCheck, X } from 'lucide-react';
 import api from '../api/axios';
 
 export default function PendingUsersList() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
   const [error, setError] = useState('');
 
   const fetchPendingUsers = useCallback(async () => {
@@ -39,6 +40,21 @@ export default function PendingUsersList() {
     }
   };
 
+  const rejectUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to reject and delete this registration?')) return;
+
+    setRejectingId(userId);
+    setError('');
+    try {
+      await api.delete(`/admin/reject-user/${userId}`);
+      setUsers((current) => current.filter((user) => user.id !== userId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to reject this user. Please try again.');
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
   return <section className="mx-auto w-full max-w-5xl space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-7">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -65,7 +81,7 @@ export default function PendingUsersList() {
                 <td className="px-4 py-3 font-semibold">{user.name}</td>
                 <td className="px-4 py-3">{user.email}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}</td>
-                <td className="px-4 py-3 text-right"><button type="button" onClick={() => approveUser(user.id)} disabled={approvingId !== null} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-600 dark:hover:bg-cyan-500">{approvingId === user.id ? <RefreshCw size={14} className="animate-spin"/> : <Check size={14}/>} {approvingId === user.id ? 'Approving…' : 'Approve'}</button></td>
+                <td className="px-4 py-3 text-right"><div className="flex justify-end gap-2"><button type="button" onClick={() => approveUser(user.id)} disabled={approvingId !== null || rejectingId !== null} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-600 dark:hover:bg-cyan-500">{approvingId === user.id ? <RefreshCw size={14} className="animate-spin"/> : <Check size={14}/>} {approvingId === user.id ? 'Approving…' : 'Approve'}</button><button type="button" onClick={() => rejectUser(user.id)} disabled={approvingId !== null || rejectingId !== null} className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40">{rejectingId === user.id ? <RefreshCw size={14} className="animate-spin"/> : <X size={14}/>} {rejectingId === user.id ? 'Rejecting…' : 'Reject'}</button></div></td>
               </tr>)}
         </tbody>
       </table>
