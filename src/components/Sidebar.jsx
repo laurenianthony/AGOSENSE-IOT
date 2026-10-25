@@ -1,5 +1,4 @@
-import { Cog, LogOut, ShieldAlert, X } from 'lucide-react';
-import Brand from './Brand';
+import { Cog, LogOut, ShieldAlert } from 'lucide-react';
 
 export default function Sidebar({
   tabs,
@@ -25,10 +24,6 @@ export default function Sidebar({
       aria-label="Dashboard sections"
       inert={isMobile && !isOpen}
     >
-      <div className="drawer-heading">
-        <Brand className="drawer-brand" href="#dashboard" onClick={() => onSelectTab('overview')}/>
-        <button className="drawer-close" type="button" aria-label="Close navigation" onClick={onClose}><X size={19}/></button>
-      </div>
       <span className="drawer-group-label font-bold">MONITORING</span>
       {tabs.slice(0, 5).map(({ id, label, icon: Icon }) => <button
         key={id}

@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowUp, BatteryCharging, Check, CheckCircle2,
   ChevronRight, CircleHelp, Clock3, Clock4, Cog, Database, Droplet,
   FileDown, Gauge, LogOut, MapPin, PanelsTopLeft, RefreshCw, Send, ShieldAlert,
-  Waves, LocateFixed, Sun, Moon, Settings, SlidersHorizontal, KeyRound, Eye, EyeOff, Menu, X,
+  Waves, LocateFixed, Sun, Moon, Settings, SlidersHorizontal, KeyRound, Eye, EyeOff, Menu, X, UserCheck,
 } from 'lucide-react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
@@ -13,6 +13,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Brand from './components/Brand';
 import Sidebar from './components/Sidebar';
+import PendingUsersList from './components/PendingUsersList';
 import { STRONG_PASSWORD_HTML_PATTERN, STRONG_PASSWORD_MESSAGE, STRONG_PASSWORD_PATTERN } from './utils/passwordPolicy';
 
 const CENTER = { latitude: 14.1417, longitude: 121.3167 };
@@ -35,6 +36,7 @@ const tabs = [
   { id: 'history', label: 'Historical Records', icon: Database },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
+const approvalTab = { id: 'approvals', label: 'Pending approvals', icon: UserCheck };
 
 const formatValue = (value, digits = 1) => value == null || value === ''
   ? '--'
@@ -658,7 +660,11 @@ export default function App() {
       try {
         const { data: currentUser } = await api.get('/user');
         if (!active) return;
-        setUser(currentUser);
+          if (currentUser.role !== 'admin' && localStorage.getItem('agosense_active_tab') === approvalTab.id) {
+            localStorage.setItem('agosense_active_tab', 'overview');
+            setActiveTab('overview');
+          }
+          setUser(currentUser);
         localStorage.setItem('auth_user', JSON.stringify(currentUser));
         if (currentUser.role) localStorage.setItem('user_role', currentUser.role);
         fetchDashboard();
@@ -685,12 +691,13 @@ export default function App() {
   const stations = stationsForSelection;
   const sortedStations = sortStations(stations);
   const isAdmin = user?.role === 'admin';
+  const visibleTabs = isAdmin ? [...tabs, approvalTab] : tabs;
   const role = isAdmin ? 'admin' : 'viewer';
   const onlineStations = stations.filter((station) => stationConnectivityStatus(station) === 'online').length;
   const attentionStations = stations.filter((station) => stationConnectivityStatus(station) !== 'online' || ['blockage_detected', 'elevated_water'].includes(evaluateDrainageCondition(readingFor(station), station).code)).length;
   const selectedStation = stations.find((station) => String(station.id) === String(selectedStationId)) || sortedStations[0];
   const selectTab = (tabId) => {
-    if (!tabs.some(({ id }) => id === tabId)) return;
+    if (!visibleTabs.some(({ id }) => id === tabId)) return;
     setActiveTab(tabId);
     localStorage.setItem('agosense_active_tab', tabId);
     setMobileMenuOpen(false);
@@ -704,11 +711,11 @@ export default function App() {
   return <DashboardErrorBoundary><div className="dashboard-shell">
     <header className="topbar">
       <div className="topbar-left"><button ref={mobileMenuToggleRef} className="mobile-menu-toggle text-slate-800 dark:text-white" type="button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}</button><Brand href="#dashboard" onClick={() => selectTab('overview')}/></div>
-      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station" className="h-9 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-semibold shadow-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-colors"><option value="" disabled hidden>Select station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code || station.code || station.location_name || station.name || `Station ${station.id}`}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button></div>
+      <div className="topbar-right"><label className="global-station-switcher" htmlFor="global-station-selector"><span className="sr-only">Select station</span><select id="global-station-selector" name="selected_station_id" value={selectedStation?.id || ''} onChange={(event) => setSelectedStationId(event.target.value || null)} disabled={!stations.length} aria-label="Select monitored station" className="h-9 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-semibold shadow-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer transition-colors"><option value="" disabled hidden>Select station</option>{sortedStations.map((station) => <option key={station.id} value={station.id}>{station.station_code || station.code || station.location_name || station.name || `Station ${station.id}`}</option>)}</select></label><div className="desktop-auth-controls"><span className={`network-state ${networkLive ? 'online' : 'offline'}`}><i/>{networkLive ? 'Network live' : 'Network offline'}</span><span className={`role-badge ${userLoading ? 'pending' : isAdmin ? 'admin' : 'viewer'}`}>{isAdmin ? <Cog size={13}/> : <ShieldAlert size={13}/>}<span>{userLoading ? 'Checking role' : isAdmin ? 'Admin' : 'Viewer'}</span></span><button className="logout-button" type="button" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div></div>
     </header>
     <div className="dashboard-workspace">
       <Sidebar
-        tabs={tabs}
+        tabs={visibleTabs}
         activeTab={activeTab}
         onSelectTab={selectTab}
         isOpen={mobileMenuOpen}
@@ -734,6 +741,7 @@ export default function App() {
       {activeTab === 'reports' && <section className="tab-page reports-page"><div className="page-intro compact-intro"><div><p className="eyebrow">FIELD OPERATIONS</p><h1>Field reports</h1><p className="intro-copy">Submit a local observation and review reports available to your account.</p></div><span className="role-context">{isAdmin ? 'ADMIN VIEW / ALL SUBMISSIONS' : 'VIEWER / YOUR SUBMISSIONS'}</span></div><FieldReportForm role={role} stations={stations} selectedStationId={selectedStation?.id ? String(selectedStation.id) : ''} onStationChange={setSelectedStationId} onSubmitted={fetchFieldReports}/><ReportsList reports={fieldReports} loading={reportsLoading} error={reportsError} isAdmin={isAdmin} onStatusUpdate={updateReportStatus}/></section>}
       {activeTab === 'history' && <section className="tab-page history-page"><RecordsTable key={selectedStation?.id || 'all-stations'} stations={stations} selectedStation={selectedStation}/></section>}
       {activeTab === 'settings' && <section className="tab-page"><SettingsPage key={`${selectedStation?.id || 'no-station'}-${selectedStation?.warning_threshold_cm ?? 60}`} theme={theme} setTheme={setTheme} stations={stations} selectedStation={selectedStation} onThresholdSaved={fetchDashboard} isAdmin={isAdmin}/></section>}
+      {activeTab === 'approvals' && isAdmin && <section className="tab-page"><PendingUsersList/></section>}
       </main>
     </div>
   </div></DashboardErrorBoundary>;

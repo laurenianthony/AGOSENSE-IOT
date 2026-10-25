@@ -993,6 +993,8 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 /* Password policy helper text stays readable and cannot alter field sizing on theme change. */
 .password-policy-hint { display: block; margin: 5px 0 0; color: #475569; font-size: 11px; font-weight: 500; line-height: 1.45; }
 [data-theme="dark"] .password-policy-hint { color: #cbd5e1; }
+.password-policy-error { display: block; margin: 5px 0 0; color: #b91c1c; font-size: 11px; font-weight: 600; line-height: 1.45; }
+[data-theme="dark"] .password-policy-error { color: #fca5a5; }
 
 /* Keep the map, report, history, and settings geometry independent of theme. */
 :where(.station-map-frame, .report-section, .reports-list-panel, .records-container,
